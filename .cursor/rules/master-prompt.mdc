@@ -1,0 +1,254 @@
+---
+alwaysApply: true
+---
+
+# Project: Insurance Lead Scheduling Form (טופס תיאום פגישות)
+
+> **Important**: Begin every response with "✅ Using master-prompt.mdc as context ✅"
+
+## Overview
+Build a single-page protected web form for an insurance company. Staff members use this form to schedule meetings with leads by selecting an insurance agent and booking via Cal.com calendar integration.
+
+## Tech Stack
+- **Framework**: Next.js 14+ (App Router)
+- **Language**: TypeScript (strict mode)
+- **Styling**: Tailwind CSS with RTL support
+- **UI Components**: shadcn/ui
+- **Form Management**: React Hook Form + Zod validation
+- **Calendar**: Cal.com embed (@calcom/embed-react)
+- **Data Source**: Airtable API (read-only)
+- **Deployment**: Vercel
+
+## Design System
+Use this exact color palette:
+```
+Primary (dark blue): #073f56
+Accent (cyan): #00dcff
+Background: #ffffff
+Text: #000000
+```
+
+Design requirements:
+- Modern, clean, minimalist aesthetic
+- RTL layout (Hebrew interface)
+- Mobile-responsive
+- Subtle shadows and rounded corners (radius-lg)
+- Clear visual hierarchy
+- Smooth hover/focus transitions
+
+## Project Structure
+```
+/app
+  /api
+    /specializations/route.ts  # GET - fetch from Airtable Lead Types table
+    /agents/route.ts           # GET - fetch from Airtable Agents table
+  /page.tsx                    # Main form page (client component)
+  /layout.tsx                  # Root layout with RTL, fonts, metadata
+  /globals.css                 # Tailwind config with custom colors
+/components
+  /ui                          # shadcn components
+  /LeadForm.tsx                # Main form component
+  /PasswordGate.tsx            # Simple password protection wrapper
+  /CalendarPopup.tsx           # Cal.com embed wrapper
+/lib
+  /validations.ts              # Zod schemas
+  /utils.ts                    # Helper functions
+/middleware.ts                 # Password protection middleware (optional approach)
+```
+
+## Form Fields Implementation
+
+The form is split into **two parts** with navigation between them.
+
+### Part 1: Lead Information
+
+#### 1. מספר ליד ראשי (Primary Lead ID)
+- Type: text input
+- Required: yes
+- Validation: non-empty string, min 3 characters
+
+#### 2. פגישה זוגית Toggle
+- Type: checkbox/switch toggle
+- Label: "פגישה זוגית"
+- Default: off (secondary lead field hidden)
+- When toggled on: reveal the secondary lead ID input with smooth animation
+
+#### 3. מספר ליד משני (Secondary Lead ID)
+- Type: text input
+- Required: yes (only when toggle is on)
+- **Hidden by default** - only shown when "פגישה זוגית" toggle is on
+- Validation: non-empty string, min 3 characters (when visible)
+
+#### 4. פגישה פרונטלית Checkbox (In-Person Meeting)
+- Type: checkbox
+- Label: "פגישה פרונטלית"
+- Default: off (address field hidden)
+- When checked: reveal the address input with smooth animation
+
+#### 5. כתובת (Address)
+- Type: text input
+- Required: yes (only when פגישה פרונטלית is checked)
+- **Hidden by default** - only shown when "פגישה פרונטלית" checkbox is checked
+- Validation: non-empty string, min 5 characters (when visible)
+
+#### Navigation
+- "המשך" (Continue) button to proceed to Part 2
+- Validate Part 1 fields before allowing navigation
+
+### Part 2: Agent Selection & Summary
+
+#### Summary Display
+- Display read-only summary of Part 1 data:
+  - Primary Lead ID
+  - Secondary Lead ID (if provided)
+  - In-person meeting status and address (if provided)
+
+#### 6. התמחות (Specialization)
+- Type: Select dropdown
+- Required: yes
+- **Dynamic**: Fetch from `/api/specializations` endpoint (Airtable Lead Types table)
+- Show loading state while fetching
+
+#### 7. סוכן (Agent)
+- Type: Select dropdown
+- Required: yes
+- **Dynamic**: Fetch from `/api/agents` endpoint (Airtable Agents table)
+- **Dependent**: Re-fetch when התמחות changes
+- Pass filter param: `?specialization=X`
+- Show loading state while fetching
+- Disable until specialization is selected
+
+#### Navigation
+- "חזרה" (Back) button to return to Part 1
+- "קביעת פגישה" (Submit) button to open Cal.com calendar
+
+## Password Protection
+
+Implement simple password gate:
+- Single shared password stored in environment variable `FORM_PASSWORD`
+- Show password input screen before revealing form
+- On correct password, store auth state in localStorage or cookie (24hr expiry)
+- No complex auth - just a simple code/password check
+- Style the password screen with the same design system
+
+## Cal.com Integration
+
+After successful form validation:
+1. Store form data in component state
+2. Open Cal.com popup using @calcom/embed-react
+3. Pass metadata to Cal.com booking:
+   - primaryLeadId
+   - secondaryLeadId (if provided)
+   - specialization
+   - agentId
+   - isInPersonMeeting (boolean)
+   - address (if in-person meeting)
+4. Use the selected agent's `calLink` for the booking URL
+5. Handle booking success/error callbacks
+
+```typescript
+// Cal.com will send webhook to n8n with this metadata
+// The n8n webhook URL is configured in Cal.com dashboard, not in this app
+```
+
+## Validation & Error Handling
+
+Using Zod + React Hook Form:
+- All error messages in Hebrew
+- Show inline errors below each field
+- Disable submit button while form is invalid or submitting
+- Show loading spinner during data fetching
+- Handle API errors gracefully with user-friendly messages
+- Toast notifications for success/error states (use sonner or shadcn toast)
+- Secondary lead validation only applies when פגישה זוגית toggle is on
+- Address validation only applies when פגישה פרונטלית checkbox is checked
+- Part 1 fields must be valid before navigating to Part 2
+
+## Security Measures
+
+1. Environment variables for sensitive data (password, Airtable API token)
+2. Input sanitization on all form fields
+3. Rate limiting consideration for API routes (add comment for future implementation)
+4. HTTPS only (handled by Vercel)
+5. No sensitive data (API tokens) in client-side code
+6. Validate all inputs server-side in API routes
+7. Airtable API token must only be used server-side
+
+## SEO & Meta
+
+In layout.tsx:
+```typescript
+export const metadata = {
+  title: "תיאום פגישות - [Company Name]",
+  description: "מערכת תיאום פגישות עם סוכני ביטוח",
+  robots: "noindex, nofollow", // Private internal tool
+}
+```
+
+- Add proper viewport meta for mobile
+- Set lang="he" and dir="rtl" on html element
+- Use Hebrew-friendly font (e.g., Heebo from Google Fonts)
+
+## Code Quality Guidelines
+
+### Clean Code
+- Small, focused functions (max 20-30 lines)
+- Descriptive variable/function names in English
+- Comments for complex logic only
+- No magic strings - use constants
+
+### TypeScript
+- Strict mode enabled
+- Define interfaces for all data structures
+- No `any` types
+- Proper typing for API responses and Airtable records
+
+### Components
+- Single responsibility principle
+- Props interfaces defined
+- Proper loading/error states
+- Accessible (proper labels, ARIA attributes)
+
+### File Organization
+- One component per file
+- Related utilities grouped together
+- Clear imports (absolute paths with @/)
+
+## Implementation Order
+
+1. Set up Next.js project with TypeScript, Tailwind, shadcn/ui
+2. Configure Tailwind with custom colors and RTL
+3. Add Heebo font from Google Fonts
+4. Create Zod validation schema (with conditional validations for secondary lead and address)
+5. Build /api/specializations route (fetch from Airtable)
+6. Build /api/agents route (fetch from Airtable with filtering)
+7. Create PasswordGate component
+8. Build LeadForm component with two-part structure and navigation state
+9. Implement Part 1: lead inputs, "פגישה זוגית" toggle, "פגישה פרונטלית" checkbox
+10. Implement animated reveal for secondary lead and address fields
+11. Implement Part 2: summary display, specialization/agent selects, navigation buttons
+12. Implement dynamic agent fetching dependent on specialization select
+13. Integrate Cal.com embed
+14. Add toast notifications
+15. Test full flow
+16. Add environment variables to .env.example
+
+## Environment Variables Needed
+
+```env
+FORM_PASSWORD=your_secure_password
+AIRTABLE_API_TOKEN=your_airtable_api_token
+AIRTABLE_BASE_ID=your_base_id
+```
+
+## Notes
+
+- Keep the implementation simple and maintainable
+- Prioritize UX - fast loading, clear feedback, intuitive flow
+- The form is internal-facing, so prioritize function over fancy animations
+- Write code that a mid-level developer can easily understand and maintain
+- Use Switch component from shadcn/ui for toggles/checkboxes
+- Ensure smooth CSS transitions when revealing/hiding conditional fields
+- Two-part form should feel like a natural wizard flow
+- Part 2 summary should be clearly distinguishable (read-only styling)
+- Back/Continue navigation should preserve form state
