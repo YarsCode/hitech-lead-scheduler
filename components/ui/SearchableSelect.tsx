@@ -119,7 +119,12 @@ export function SearchableSelect({
     }
   };
 
-  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.metaKey || e.ctrlKey) {
+      e.stopPropagation();
+      return;
+    }
+    
     switch (e.key) {
       case "Escape":
         setIsOpen(false);

@@ -25,11 +25,13 @@ async function deleteEventType(eventTypeId: string) {
 
     if (!calcomResponse.ok) {
       const errorData = await calcomResponse.text();
-      console.error("Cal.com API error deleting event type:", errorData);
-      // Return success anyway if it's a 404 (already deleted)
-      if (calcomResponse.status === 404) {
+      
+      const isNotFound = calcomResponse.status === 404 || errorData.includes("NOT_FOUND");
+      if (isNotFound) {
         return NextResponse.json({ success: true, alreadyDeleted: true });
       }
+      
+      console.error("Cal.com API error deleting event type:", errorData);
       return NextResponse.json(
         { error: "Failed to delete event type in Cal.com", details: errorData },
         { status: calcomResponse.status }

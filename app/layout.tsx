@@ -9,7 +9,7 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "תיאום פגישות - HiTech סוכנות לביטוח",
+  title: "תיאום פגישות - הייטק סוכנות לביטוח",
   description: "מערכת תיאום פגישות עם סוכני ביטוח",
   robots: "noindex, nofollow",
 };

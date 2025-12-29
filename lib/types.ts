@@ -1,7 +1,12 @@
 export interface Agent {
   id: string;
   name: string;
-  userId?: number; // Cal.com user ID - only agents with this can be scheduled
+  email?: string;
+  userId?: number;
+  dailyLimit?: number;
+  monthlyLimit?: number;
+  weight?: number;
+  phone?: string;
 }
 
 export interface AgentsResponse {
@@ -18,13 +23,19 @@ export interface SpecializationsResponse {
 }
 
 export interface CreateEventTypeRequest {
-  primaryLeadId: string;
-  additionalLeadId?: string;
+  primaryLeadNumber: string;
+  additionalLeadNumber?: string;
+  leadId?: number;
+  additionalLeadId?: number;
+  customerId?: number;
+  additionalCustomerId?: number;
+  customerFullName?: string;
   agentName?: string;
-  hosts: { userId: number; weight: number }[];
+  agentPhone?: string;
+  interestName?: string;
+  hosts: { userId: number; weight: number; dailyLimit?: number; email?: string }[];
   isInPersonMeeting?: boolean;
   address?: string;
-  specialization?: string;
 }
 
 export interface CreateEventTypeResponse {
@@ -33,4 +44,53 @@ export interface CreateEventTypeResponse {
   slug: string;
   bookingLink: string;
   title: string;
+}
+
+export interface CalcomBookingHost {
+  id: number;
+  name: string;
+  email: string;
+  username: string;
+  timeZone: string;
+}
+
+export interface CalcomBooking {
+  id: number;
+  uid: string;
+  title: string;
+  hosts: CalcomBookingHost[];
+  status: string;
+  start: string;
+  end: string;
+}
+
+export interface BookingsResponse {
+  hostUserIds: number[];
+}
+
+export interface ValidatedLead {
+  number: number;
+  id?: number;
+  customerId?: number;
+  fullName: string;
+  email?: string;
+  interestName?: string;
+}
+
+export interface ValidateLeadsRequest {
+  primaryLeadNumber: string;
+  additionalLeadNumber?: string;
+}
+
+export interface ValidateLeadsResponse {
+  success: boolean;
+  error?: string;
+  primaryLead?: ValidatedLead;
+  additionalLead?: ValidatedLead;
+}
+
+export interface BookingDetails {
+  agentName: string;
+  startTime: string;
+  endTime: string;
 }

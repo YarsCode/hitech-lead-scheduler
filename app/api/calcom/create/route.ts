@@ -7,16 +7,24 @@ const CALCOM_TEAM_SLUG = process.env.CALCOM_TEAM_SLUG
 interface Host {
   userId: number;
   weight: number;
+  dailyLimit?: number;
+  email?: string;
 }
 
 interface CreateEventTypeRequest {
-  primaryLeadId: string;
-  additionalLeadId?: string;
+  primaryLeadNumber: string;
+  additionalLeadNumber?: string;
+  leadId?: number;
+  additionalLeadId?: number;
+  customerId?: number;
+  additionalCustomerId?: number;
+  customerFullName?: string;
   agentName?: string;
+  agentPhone?: string;
+  interestName?: string;
   hosts: Host[];
   isInPersonMeeting?: boolean;
   address?: string;
-  specialization?: string;
 }
 
 interface CalcomEventTypeResponse {
@@ -39,7 +47,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: CreateEventTypeRequest = await request.json();
-    const { primaryLeadId, additionalLeadId, agentName, hosts, isInPersonMeeting, address, specialization } = body;
+    // Note: primaryLeadNumber is in the request but not destructured - its value is prefilled by CalendarPopup
+    const { additionalLeadNumber, leadId, additionalLeadId, customerId, additionalCustomerId, customerFullName, agentName, agentPhone, interestName, hosts, isInPersonMeeting, address } = body;
 
     // Validate hosts
     if (!hosts || hosts.length === 0) {
@@ -53,88 +62,50 @@ export async function POST(request: NextRequest) {
     const timestamp = Date.now().toString(36);
     const slug = `meeting-${timestamp}`;
 
-    // Build title - Hebrew, concise, with lead number and agent name
-    const leadInfo = additionalLeadId 
-      ? `לידים ${primaryLeadId}, ${additionalLeadId}`
-      : `ליד ${primaryLeadId}`;
-    const agentInfo = agentName ? ` - ${agentName}` : "";
-    const title = `פגישה ${leadInfo}${agentInfo}`;
+    // Build title - used for both event type and email
+    const title = `${customerFullName || "לקוח"}, פגישה עם ${agentName || "סוכן"} בנושא ${interestName || "ביטוח"}`;
 
-    // Fixed description - super concise
-    const description = isInPersonMeeting && address
-      ? `פגישת ייעוץ פרונטלית בכתובת: ${address}`
-      : "פגישת ייעוץ";
+    // Simple description for email - Cal.com will handle the details
+    const description = `היי,
+נקבעה לנו שיחה במועד זה בנושא ${interestName || "ביטוח"} בתיק שלך.
+אם יש שינוי בתוכניות – אפשר לעדכן כאן או ישירות בנייד שלי ${agentPhone || ""}
 
-    // Build booking fields - only include fields with actual values
-    const bookingFields = [
-      // Primary lead ID is always required
-      {
-        slug: "primaryLeadId",
-        type: "text",
-        label: "מספר ליד ראשי",
-        defaultValue: primaryLeadId,
-        hidden: true,
-        required: true,
-      },
-      // isInPersonMeeting is always included (boolean flag)
-      {
-        slug: "isInPersonMeeting",
-        type: "text",
-        label: "פגישה פרונטלית",
-        defaultValue: isInPersonMeeting ? "true" : "false",
-        hidden: true,
-        required: true,
-      },
-    ];
+ניפגש!`;
 
-    // Only add additionalLeadId if it has a value
-    if (additionalLeadId) {
-      bookingFields.push({
-        slug: "additionalLeadId",
-        type: "text",
-        label: "מספר ליד נוסף",
-        defaultValue: additionalLeadId,
-        hidden: true,
-        required: false,
-      });
-    }
+    // Build locations array based on meeting type
+    const locations = isInPersonMeeting && address
+      ? [{ type: "address", address, public: true }]
+      : [{ type: "integration", integration: "cal-video" }];
 
-    // Only add address if it has a value
-    if (address) {
-      bookingFields.push({
-        slug: "address",
-        type: "text",
-        label: "כתובת",
-        defaultValue: address,
-        hidden: true,
-        required: false,
-      });
-    }
+    // Store lead IDs, customer IDs, and address as metadata to pass to webhook without showing in email
+    const metadata = {
+      primaryLeadNumber: body.primaryLeadNumber,
+      ...(additionalLeadNumber && { additionalLeadNumber }),
+      ...(leadId && { leadId }),
+      ...(additionalLeadId && { additionalLeadId }),
+      ...(customerId && { customerId }),
+      ...(additionalCustomerId && { additionalCustomerId }),
+      ...(address && { address }),
+    };
 
-    // Only add specialization if it has a value
-    if (specialization) {
-      bookingFields.push({
-        slug: "specialization",
-        type: "text",
-        label: "התמחות",
-        defaultValue: specialization,
-        hidden: true,
-        required: false,
-      });
-    }
-
-    // Build Cal.com API request
+    // Build Cal.com API request - 60 min for couple meetings, 30 min for single
     const eventTypePayload = {
-      lengthInMinutes: 30,
+      lengthInMinutes: additionalLeadNumber ? 60 : 30,
       title,
       slug,
       description,
+      customName: title, // Use description text as the custom event type name
       schedulingType: "ROUND_ROBIN",
       hosts: hosts.map((h) => ({
         userId: Number(h.userId),
-        weight: 100, // Fixed weight for all
+        weight: h.weight,
       })),
-      bookingFields,
+      locations,
+      metadata,
+      bookingWindow: {
+        type: "calendarDays",
+        value: 21,
+      },
     };
 
     // Create event type via Cal.com API v2
@@ -161,8 +132,34 @@ export async function POST(request: NextRequest) {
 
     const calcomData: CalcomEventTypeResponse = await calcomResponse.json();
 
-    // Return the booking link for the team event type (uses team slug, not ID)
-    const bookingLink = `team/${CALCOM_TEAM_SLUG}/${calcomData.data.slug}`;
+    const baseBookingLink = `team/${CALCOM_TEAM_SLUG}/${calcomData.data.slug}`;
+    
+    // Build dailyLimits mapping from hosts (email -> dailyLimit)
+    const dailyLimitsMap = Object.fromEntries(
+      hosts.filter(h => h.email && h.dailyLimit !== undefined).map(h => [h.email, h.dailyLimit])
+    );
+
+    // Collect all metadata fields that should be passed as URL parameters
+    const metadataFields = {
+      primaryLeadNumber: body.primaryLeadNumber,
+      additionalLeadNumber,
+      leadId: leadId?.toString(),
+      additionalLeadId: additionalLeadId?.toString(),
+      customerId: customerId?.toString(),
+      additionalCustomerId: additionalCustomerId?.toString(),
+      meetingAddress: isInPersonMeeting ? address : undefined,
+      dailyLimits: Object.keys(dailyLimitsMap).length > 0 ? JSON.stringify(dailyLimitsMap) : undefined,
+    };
+    
+    // Build URL params from non-empty metadata fields
+    const metadataParams = new URLSearchParams();
+    Object.entries(metadataFields).forEach(([key, value]) => {
+      if (value) {
+        metadataParams.append(`metadata[${key}]`, value);
+      }
+    });
+    
+    const bookingLink = `${baseBookingLink}?${metadataParams.toString()}`;
 
     return NextResponse.json({
       success: true,

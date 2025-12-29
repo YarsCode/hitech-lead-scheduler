@@ -85,7 +85,7 @@ export function PasswordGate({ children }: PasswordGateProps) {
           </div>
 
           <h1 className="mb-2 text-center text-2xl font-bold text-primary">
-            HiTech סוכנות לביטוח
+            הייטק סוכנות לביטוח
           </h1>
           <p className="mb-6 text-center text-gray-500">
             הזן סיסמה כדי להמשיך

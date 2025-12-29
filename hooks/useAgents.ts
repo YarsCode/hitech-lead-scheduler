@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Agent } from "@/lib/types";
 
-export function useAgents(specialization: string) {
+export function useAgents(specialization: string, evenDistribution = false) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -11,9 +11,11 @@ export function useAgents(specialization: string) {
     async function fetchAgents() {
       setLoading(true);
       try {
-        const url = specialization
-          ? `/api/agents?specialization=${encodeURIComponent(specialization)}`
-          : "/api/agents";
+        const params = new URLSearchParams();
+        if (specialization) params.set("specialization", specialization);
+        if (evenDistribution) params.set("evenDistribution", "true");
+        
+        const url = `/api/agents${params.toString() ? `?${params}` : ""}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch agents");
         const data = await res.json();
@@ -25,7 +27,7 @@ export function useAgents(specialization: string) {
       }
     }
     fetchAgents();
-  }, [specialization]);
+  }, [specialization, evenDistribution]);
 
   return { agents, loading };
 }
