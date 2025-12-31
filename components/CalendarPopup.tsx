@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { format } from "date-fns";
 import Cal, { getCalApi } from "@calcom/embed-react";
 import type { BookingDetails } from "@/lib/types";
 
@@ -14,7 +13,6 @@ interface PrefillData {
 interface CalendarPopupProps {
   bookingLink: string;
   prefillData: PrefillData;
-  selectedDate?: Date;
   onBookingSuccess: (details: BookingDetails) => void;
   onBookingError: () => void;
 }
@@ -22,7 +20,6 @@ interface CalendarPopupProps {
 export function CalendarPopup({
   bookingLink,
   prefillData,
-  selectedDate,
   onBookingSuccess,
   onBookingError,
 }: CalendarPopupProps) {
@@ -65,9 +62,6 @@ export function CalendarPopup({
   // Add guest email if there's an additional lead with email
   const guests = prefillData.additionalEmail ? [prefillData.additionalEmail] : [];
 
-  // Format date for Cal.com (YYYY-MM-DD)
-  const dateStr = selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined;
-
   return (
     <div className="h-[800px] md:h-[540px] w-full overflow-hidden rounded-xl border border-border">
       <Cal
@@ -78,10 +72,8 @@ export function CalendarPopup({
           ...(prefillData.name && { name: prefillData.name }),
           ...(prefillData.email && { email: prefillData.email }),
           ...(guests.length > 0 && { guests }),
-          ...(dateStr && { date: dateStr }),
         }}
       />
     </div>
   );
 }
-

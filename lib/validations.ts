@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-// Agent selection mode: "auto" | "specialization" | "manual"
-export const agentSelectionModes = ["auto", "specialization", "manual"] as const;
+// Agent selection mode: "auto" | "manual"
+export const agentSelectionModes = ["auto", "manual"] as const;
 export type AgentSelectionMode = (typeof agentSelectionModes)[number];
 
 export const leadFormSchema = z
@@ -14,7 +14,6 @@ export const leadFormSchema = z
     isInPersonMeeting: z.boolean(),
     address: z.string().optional().or(z.literal("")),
     agentSelectionMode: z.enum(agentSelectionModes),
-    specializationForSpecMode: z.string().optional().or(z.literal("")),
     specializationForManualMode: z.string().optional().or(z.literal("")),
     agentId: z.string().optional().or(z.literal("")),
   })
@@ -42,19 +41,6 @@ export const leadFormSchema = z
     {
       message: "יש להזין כתובת",
       path: ["address"],
-    }
-  )
-  .refine(
-    (data) => {
-      // Specialization mode: must select a specialization
-      if (data.agentSelectionMode === "specialization") {
-        return data.specializationForSpecMode && data.specializationForSpecMode.length >= 1;
-      }
-      return true;
-    },
-    {
-      message: "יש לבחור התמחות",
-      path: ["specializationForSpecMode"],
     }
   )
   .refine(

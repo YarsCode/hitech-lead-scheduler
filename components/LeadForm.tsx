@@ -6,10 +6,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { leadFormSchema, leadFormPart1Schema, type LeadFormData, type AgentSelectionMode } from "@/lib/validations";
-import type { Agent, BookingsResponse, ValidateLeadsResponse, ValidatedLead, BookingDetails } from "@/lib/types";
+import type { Agent, ValidateLeadsResponse, ValidatedLead, BookingDetails } from "@/lib/types";
 import { useSpecializations } from "@/hooks/useSpecializations";
 import { useAgents } from "@/hooks/useAgents";
 import { CalendarPopup } from "./CalendarPopup";
+import { getCurrentUser } from "./LoginGate";
 import {
   Dialog,
   DialogContent,
@@ -21,13 +22,17 @@ import { SearchableSelect } from "./ui/SearchableSelect";
 import { TextInput } from "./ui/TextInput";
 import { SummaryItem } from "./ui/SummaryItem";
 import { ToggleButton } from "./ui/ToggleButton";
-import { DatePicker } from "./ui/DatePicker";
 import { RadioGroup } from "./ui/RadioGroup";
 import { Loader2, Calendar, Users, UserPlus, MapPin, ArrowLeft, ArrowRight, CheckCircle } from "lucide-react";
 
+function getHebrewDayName(date: Date): string {
+  return date.toLocaleDateString("he-IL", { weekday: "long" });
+}
+
 export function LeadForm() {
   const formRef = useRef<HTMLFormElement>(null);
-  const [currentPart, setCurrentPart] = useState<1 | 2 | 3>(1);
+  const hasDocumentedAssignment = useRef(false);
+  const [currentPart, setCurrentPart] = useState<1 | 2>(1);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [bookingLink, setBookingLink] = useState<string>("");
@@ -40,19 +45,13 @@ export function LeadForm() {
   }>({ open: false, message: "" });
   const [bookingDetails, setBookingDetails] = useState<BookingDetails | null>(null);
 
-  // Date picker state for daily limit filtering
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
-  const [qualifiedAgents, setQualifiedAgents] = useState<Agent[]>([]);
-  const [dateError, setDateError] = useState<string>("");
-
   // Lead validation state
   const [isValidatingLeads, setIsValidatingLeads] = useState(false);
   const [leadValidationError, setLeadValidationError] = useState<string>("");
   const [validatedPrimaryLead, setValidatedPrimaryLead] = useState<ValidatedLead | null>(null);
   const [validatedAdditionalLead, setValidatedAdditionalLead] = useState<ValidatedLead | null>(null);
 
-  // Agent availability error (for auto/specialization modes)
+  // Agent availability error (for auto mode)
   const [agentAvailabilityError, setAgentAvailabilityError] = useState<string>("");
 
   const {
@@ -72,7 +71,6 @@ export function LeadForm() {
       isInPersonMeeting: false,
       address: "",
       agentSelectionMode: "auto" as AgentSelectionMode,
-      specializationForSpecMode: "",
       specializationForManualMode: "",
       agentId: "",
     },
@@ -84,94 +82,19 @@ export function LeadForm() {
   const additionalLeadNumber = watch("additionalLeadNumber");
   const address = watch("address");
   const agentSelectionMode = watch("agentSelectionMode");
-  const specializationForSpecMode = watch("specializationForSpecMode");
   const specializationForManualMode = watch("specializationForManualMode");
   const agentId = watch("agentId");
 
-  // Get the active specialization based on current mode
-  const activeSpecialization = agentSelectionMode === "specialization" 
-    ? specializationForSpecMode 
-    : agentSelectionMode === "manual" 
-      ? specializationForManualMode 
-      : "";
+  // Get the active specialization for manual mode filtering
+  const activeSpecialization = agentSelectionMode === "manual" ? specializationForManualMode : "";
 
   // Use custom hooks for data fetching
   // Note: Even distribution filtering is done separately in handleContinueToPart3, not here
   const { specializations, loading: loadingSpecializations } = useSpecializations();
   const { agents, loading: loadingAgents } = useAgents(activeSpecialization ?? "", false);
   
-  // State for filtered agents after even distribution (populated when continuing to Part 3)
-  const [evenDistributionAgents, setEvenDistributionAgents] = useState<Agent[]>([]);
-  const [isLoadingEvenDistribution, setIsLoadingEvenDistribution] = useState(false);
-
   // Filter agents to only those with a Cal.com userId (required for booking)
   const agentsWithUserId = agents.filter((agent) => agent.userId !== undefined && agent.userId !== null);
-
-  // Check if a specific agent is selected (only relevant in manual mode)
-  const hasSpecificAgent = agentSelectionMode === "manual" && Boolean(agentId);
-  
-  // Need date picker (Part 3) when auto or specialization mode is selected (no specific agent)
-  const needsDatePicker = !hasSpecificAgent;
-
-  // Fetch bookings and filter agents when date is selected
-  // Uses evenDistributionAgents which are populated when entering Part 3
-  const handleDateSelect = useCallback(async (date: Date | undefined) => {
-    setSelectedDate(date);
-    setDateError("");
-    setQualifiedAgents([]);
-
-    if (!date) return;
-
-    setIsCheckingAvailability(true);
-
-    try {
-      const dateStr = format(date, "yyyy-MM-dd");
-      const response = await fetch(`/api/calcom/bookings?date=${dateStr}`);
-      
-      if (!response.ok) {
-        throw new Error("Failed to fetch bookings");
-      }
-
-      const data: BookingsResponse = await response.json();
-      
-      // Count bookings per host userId
-      const bookingCounts: Record<number, number> = {};
-      for (const hostUserId of data.hostUserIds) {
-        bookingCounts[hostUserId] = (bookingCounts[hostUserId] || 0) + 1;
-      }
-      console.log("[DEBUG] bookingCounts:", bookingCounts, "for date:", dateStr);
-      // Filter agents based on daily limit
-      // Use evenDistributionAgents (already filtered for even distribution when entering Part 3)
-      const qualified = evenDistributionAgents.filter((agent) => {
-        // If no daily limit set, treat as unlimited
-        if (!agent.dailyLimit) return true;
-        
-        const currentBookings = bookingCounts[agent.userId!] || 0;
-        return currentBookings < agent.dailyLimit;
-      });
-
-      if (qualified.length === 0) {
-        setDateError("אין סוכנים זמינים בתאריך זה, אנא בחר תאריך אחר");
-      } else {
-        console.log(`${qualified.length} סוכנים זמינים בתאריך זה`);
-        setQualifiedAgents(qualified);
-      }
-    } catch (error) {
-      console.error("Error checking availability:", error);
-      setDateError("אירעה שגיאה בבדיקת הזמינות. אנא נסה שוב.");
-    } finally {
-      setIsCheckingAvailability(false);
-    }
-  }, [evenDistributionAgents]);
-
-  // Reset date selection when a specific agent is selected
-  useEffect(() => {
-    if (hasSpecificAgent) {
-      setSelectedDate(undefined);
-      setQualifiedAgents([]);
-      setDateError("");
-    }
-  }, [hasSpecificAgent]);
 
   // Delete event type helper function
   const deleteEventType = useCallback(async (id: number | null) => {
@@ -197,7 +120,7 @@ export function LeadForm() {
   // Clear agent availability error when specialization changes
   useEffect(() => {
     setAgentAvailabilityError("");
-  }, [specializationForSpecMode, specializationForManualMode]);
+  }, [specializationForManualMode]);
 
   // Handle agent selection mode change
   const handleAgentSelectionModeChange = (value: string) => {
@@ -209,17 +132,11 @@ export function LeadForm() {
     
     // Clear fields when switching modes
     if (mode === "auto") {
-      setValue("specializationForSpecMode", "", { shouldValidate: true });
       setValue("specializationForManualMode", "", { shouldValidate: true });
       setValue("agentId", "", { shouldValidate: true });
       setSelectedAgent(null);
-    } else if (mode === "specialization") {
-      setValue("specializationForManualMode", "", { shouldValidate: true });
-      setValue("agentId", "", { shouldValidate: true });
-      setSelectedAgent(null);
-    } else if (mode === "manual") {
-      setValue("specializationForSpecMode", "", { shouldValidate: true });
     }
+    // Manual mode doesn't need to clear anything
   };
 
   const toggleCouplesMeeting = () => {
@@ -294,57 +211,6 @@ export function LeadForm() {
     }
   }, [validatePart1, primaryLeadNumber, additionalLeadNumber, isCouplesMeeting]);
 
-  const handleContinueToPart3 = useCallback(async () => {
-    // Clear previous error
-    setAgentAvailabilityError("");
-
-    // If specific agent selected (manual mode), skip to submit
-    if (hasSpecificAgent) {
-      formRef.current?.requestSubmit();
-      return;
-    }
-
-    // For auto/specialization modes, fetch agents with even distribution applied
-    setIsLoadingEvenDistribution(true);
-    
-    try {
-      const params = new URLSearchParams();
-      if (activeSpecialization) params.set("specialization", activeSpecialization);
-      params.set("evenDistribution", "true");
-      
-      const url = `/api/agents${params.toString() ? `?${params}` : ""}`;
-      const res = await fetch(url);
-      
-      if (!res.ok) {
-        throw new Error("Failed to fetch agents");
-      }
-      
-      const data = await res.json();
-      const filteredAgents: Agent[] = data.agents || [];
-      
-      // Filter to only agents with Cal.com userId
-      const schedulableAgents = filteredAgents.filter(
-        (agent) => agent.userId !== undefined && agent.userId !== null
-      );
-      
-      console.log(`[Part2→Part3] After even distribution filter: ${schedulableAgents.length} agents`, schedulableAgents.map(a => a.name));
-
-      if (schedulableAgents.length === 0) {
-        setAgentAvailabilityError("אין סוכנים זמינים להקצאה. אנא בחר התמחות אחרת או פנה למנהל המערכת.");
-        return;
-      }
-      
-      // Store the filtered agents and proceed to Part 3
-      setEvenDistributionAgents(schedulableAgents);
-      setCurrentPart(3);
-    } catch (error) {
-      console.error("Error fetching agents with even distribution:", error);
-      setAgentAvailabilityError("אירעה שגיאה בטעינת הסוכנים. אנא נסה שוב.");
-    } finally {
-      setIsLoadingEvenDistribution(false);
-    }
-  }, [hasSpecificAgent, activeSpecialization]);
-
   // Handle Enter key to continue from Part 1
   useEffect(() => {
     if (currentPart !== 1) return;
@@ -359,32 +225,22 @@ export function LeadForm() {
     return () => document.removeEventListener("keydown", handler);
   }, [currentPart, handleContinueToPart2]);
 
-  // Handle Enter key to continue from Part 2
+  // Handle Enter key to submit from Part 2
   useEffect(() => {
     if (currentPart !== 2 || showCalendar) return;
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "Enter" && isValid && !isSubmitting && !isLoadingEvenDistribution) {
+      if (e.key === "Enter" && isValid && !isSubmitting) {
         e.preventDefault();
-        handleContinueToPart3();
+        formRef.current?.requestSubmit();
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [currentPart, showCalendar, isValid, isSubmitting, isLoadingEvenDistribution, handleContinueToPart3]);
+  }, [currentPart, showCalendar, isValid, isSubmitting]);
 
   const handleBackToPart1 = () => {
     setCurrentPart(1);
-  };
-
-  const handleBackToPart2 = () => {
-    // Clear the even distribution agents and date selection when going back
-    // (will be re-fetched when clicking continue again)
-    setEvenDistributionAgents([]);
-    setSelectedDate(undefined);
-    setQualifiedAgents([]);
-    setDateError("");
-    setCurrentPart(2);
   };
 
   const handleAgentChange = (agentId: string) => {
@@ -397,24 +253,57 @@ export function LeadForm() {
     setErrorModal({ open: true, message });
   };
 
-  // Get hosts for Cal.com - either selected agent, qualified agents from date picker, or all schedulable agents
-  const getHosts = (data: LeadFormData): { userId: number; weight: number; dailyLimit?: number; email?: string }[] => {
-    // If a specific agent is selected (manual mode), use only that agent
+  const documentManualAssignment = (agentName: string) => {
+    if (hasDocumentedAssignment.current) return;
+    hasDocumentedAssignment.current = true;
+
+    const currentUser = getCurrentUser();
+    if (currentUser?.username && agentName) {
+      fetch("/api/document-manual-assignment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: currentUser.username,
+          agentName,
+        }),
+      }).catch((error) => {
+        console.error("Error documenting manual assignment:", error);
+      });
+    }
+  };
+
+  // Fetch hosts based on agent selection mode
+  const fetchHosts = async (data: LeadFormData): Promise<{ userId: number; weight: number; email?: string; dailyLimit?: number }[]> => {
+    // Manual mode - use selected agent
     if (data.agentId) {
       const agent = agentsWithUserId.find((a) => a.id === data.agentId);
-      if (agent?.userId) {
-        return [{ userId: agent.userId, weight: agent.weight ?? 100, dailyLimit: agent.dailyLimit, email: agent.email }];
-      }
-      return [];
+      return agent?.userId 
+        ? [{ userId: agent.userId, weight: agent.weight ?? 100, email: agent.email, dailyLimit: agent.dailyLimit }] 
+        : [];
     }
     
-    // For auto/specialization modes with date picker, use qualified agents (filtered by daily limit)
-    if (needsDatePicker && qualifiedAgents.length > 0) {
-      return qualifiedAgents.map((a) => ({ userId: a.userId!, weight: a.weight ?? 100, dailyLimit: a.dailyLimit, email: a.email }));
+    // Auto mode - fetch with even distribution filter and interest-based filtering
+    const params = new URLSearchParams();
+    // Pass lead's interest to filter agents by their specialization exclusions
+    if (validatedPrimaryLead?.interestName) {
+      params.set("interest", validatedPrimaryLead.interestName);
     }
+    params.set("evenDistribution", "true");
     
-    // Fallback: use even distribution agents (should not normally reach here in date picker mode)
-    return evenDistributionAgents.map((a) => ({ userId: a.userId!, weight: a.weight ?? 100, dailyLimit: a.dailyLimit, email: a.email }));
+    const res = await fetch(`/api/agents?${params}`);
+    if (!res.ok) throw new Error("Failed to fetch agents");
+    
+    const agentsData = await res.json();
+    const schedulableAgents = (agentsData.agents || []).filter(
+      (a: Agent) => a.userId != null
+    );
+        
+    return schedulableAgents.map((a: Agent) => ({ 
+      userId: a.userId!, 
+      weight: a.weight ?? 100, 
+      email: a.email,
+      dailyLimit: a.dailyLimit,
+    }));
   };
 
   const createCalcomEventType = async (data: LeadFormData, hosts: { userId: number; weight: number }[]) => {
@@ -448,22 +337,11 @@ export function LeadForm() {
   };
 
   const onSubmit = async (data: LeadFormData) => {
-    // Validate date selection in date picker mode
-    if (needsDatePicker) {
-      if (!selectedDate) {
-        setDateError("יש לבחור תאריך לפגישה");
-        return;
-      }
-      if (qualifiedAgents.length === 0) {
-        setDateError("אין סוכנים זמינים בתאריך זה, אנא בחר תאריך אחר");
-        return;
-      }
-    }
-
     setIsSubmitting(true);
+    setAgentAvailabilityError("");
     
     try {
-      const hosts = getHosts(data);
+      const hosts = await fetchHosts(data);
       
       if (hosts.length === 0) {
         showErrorModal("לא נמצאו סוכנים זמינים לתיאום פגישה.");
@@ -482,15 +360,19 @@ export function LeadForm() {
     }
   };
 
-  const handleBookingSuccess = async (details: BookingDetails) => {
+  const handleBookingSuccess = useCallback(async (details: BookingDetails) => {
     await deleteEventType(eventTypeId);
     setEventTypeId(null);
     setShowCalendar(false);
     setBookingDetails(details);
     setBookingComplete(true);
-  };
 
-  const handleBookingError = async () => {
+    if (agentSelectionMode === "manual") {
+      documentManualAssignment(details.agentName);
+    }
+  }, [eventTypeId, agentSelectionMode, deleteEventType]);
+
+  const handleBookingError = useCallback(async () => {
     await deleteEventType(eventTypeId);
     setEventTypeId(null);
     setShowCalendar(false);
@@ -498,7 +380,7 @@ export function LeadForm() {
       open: true,
       message: "אירעה שגיאה בקביעת הפגישה. אנא נסה שוב.",
     });
-  };
+  }, [eventTypeId, deleteEventType]);
 
   const handleBackToForm = async () => {
     await deleteEventType(eventTypeId);
@@ -527,13 +409,13 @@ export function LeadForm() {
           </p>
         </div>
 
-        {/* Progress indicator - always show 3 steps */}
+        {/* Progress indicator - 2 steps */}
         <div className="mb-6 flex items-center justify-center gap-2">
           <div className={cn(
             "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
             currentPart >= 1 ? "bg-primary text-white" : "bg-gray-200 text-gray-500"
           )}>
-            {currentPart > 1 ? <CheckCircle className="h-5 w-5" /> : "1"}
+            {currentPart > 1 || showCalendar ? <CheckCircle className="h-5 w-5" /> : "1"}
           </div>
           <div className={cn(
             "h-1 w-12 rounded-full transition-colors",
@@ -543,17 +425,7 @@ export function LeadForm() {
             "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
             currentPart >= 2 || showCalendar ? "bg-primary text-white" : "bg-gray-200 text-gray-500"
           )}>
-            {(currentPart > 2 || showCalendar) ? <CheckCircle className="h-5 w-5" /> : "2"}
-          </div>
-          <div className={cn(
-            "h-1 w-12 rounded-full transition-colors",
-            currentPart >= 3 || showCalendar ? "bg-primary" : "bg-gray-200"
-          )} />
-          <div className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
-            currentPart >= 3 || showCalendar ? "bg-primary text-white" : "bg-gray-200 text-gray-500"
-          )}>
-            {showCalendar ? <CheckCircle className="h-5 w-5" /> : "3"}
+            {showCalendar ? <CheckCircle className="h-5 w-5" /> : "2"}
           </div>
         </div>
 
@@ -584,7 +456,6 @@ export function LeadForm() {
                 email: validatedPrimaryLead?.email,
                 additionalEmail: validatedAdditionalLead?.email,
               }}
-              selectedDate={needsDatePicker ? selectedDate : undefined}
               onBookingSuccess={handleBookingSuccess}
               onBookingError={handleBookingError}
             />
@@ -738,33 +609,7 @@ export function LeadForm() {
                   onChange={handleAgentSelectionModeChange}
                 />
 
-                {/* Option 2: Specialization */}
-                <RadioGroup
-                  options={[{ value: "specialization", label: "הקצאה לפי התמחות", description: "הפגישה תוקצה לסוכן זמין לפי התמחות נבחרת" }]}
-                  value={agentSelectionMode}
-                  onChange={handleAgentSelectionModeChange}
-                />
-
-                {/* Specialization select for Specialization mode */}
-                {agentSelectionMode === "specialization" && (
-                  <div className="animate-slide-down">
-                    <SearchableSelect
-                      label="התמחות*"
-                      options={specializations.map((s) => ({ value: s.name, label: s.name }))}
-                      value={specializationForSpecMode || ""}
-                      onChange={(value) => setValue("specializationForSpecMode", value, { shouldValidate: true })}
-                      placeholder="בחר התמחות"
-                      loadingPlaceholder="טוען..."
-                      emptyPlaceholder="אין התמחויות"
-                      noResultsText="לא נמצאו תוצאות"
-                      disabled={loadingSpecializations}
-                      loading={loadingSpecializations}
-                      error={errors.specializationForSpecMode?.message}
-                    />
-                  </div>
-                )}
-
-                {/* Option 3: Manual */}
+                {/* Option 2: Manual */}
                 <RadioGroup
                   options={[{ value: "manual", label: "בחירת סוכן ידנית", description: "בחר סוכן ספציפי לפגישה" }]}
                   value={agentSelectionMode}
@@ -826,94 +671,8 @@ export function LeadForm() {
                   <span>חזרה</span>
                 </button>
                 <button
-                  type="button"
-                  onClick={handleContinueToPart3}
-                  disabled={!isValid || isSubmitting || isLoadingEvenDistribution}
-                  className={cn(
-                    "flex flex-[2] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-white",
-                    "hover:bg-primary/90 active:scale-[0.98]",
-                    "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
-                    "disabled:cursor-not-allowed disabled:opacity-50"
-                  )}
-                >
-                  <span>
-                    {isSubmitting || isLoadingEvenDistribution 
-                      ? "טוען..." 
-                      : hasSpecificAgent 
-                        ? "קביעת פגישה" 
-                        : "המשך"}
-                  </span>
-                  {isSubmitting || isLoadingEvenDistribution ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : hasSpecificAgent ? (
-                    <Calendar className="h-5 w-5" />
-                  ) : (
-                    <ArrowLeft className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Part 3: Date Selection */}
-          {currentPart === 3 && (
-            <div className="space-y-5 animate-fade-in">
-              <div className="mb-4 border-b border-gray-100 pb-3">
-                <h2 className="text-xl font-semibold text-primary">בחירת תאריך</h2>
-              </div>
-
-              {/* Notice about date picker purpose */}
-              <div className="rounded-xl border-r-4 border-r-amber-500 bg-amber-200/70 py-4 pl-4 pr-5 text-sm leading-relaxed text-amber-900">
-                <p className="text-base font-extrabold">
-                  <span className="text-xl">⚠️</span> שימו לב
-                </p>
-                <p className="mt-1.5">
-                  התאריך שתבחרו כאן אינו מבטיח זמינות בלוח השנה (האמיתי) שבמסך הבא.
-                </p>
-                <p className="mt-1">
-                שלב זה רק מסנן סוכנים שהגיעו למכסה היומית.
-                </p>
-              </div>
-
-              <DatePicker
-                label="בחר תאריך לפגישה"
-                value={selectedDate}
-                onChange={handleDateSelect}
-                disabled={isCheckingAvailability}
-                error={dateError}
-              />
-              
-              {isCheckingAvailability && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>בודק זמינות סוכנים...</span>
-                </div>
-              )}
-              
-
-              {/* Navigation Buttons */}
-              <div className="mt-6 flex gap-3">
-                <button
-                  type="button"
-                  onClick={handleBackToPart2}
-                  className={cn(
-                    "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-border bg-white py-4 font-semibold text-gray-600",
-                    "hover:border-primary hover:text-primary active:scale-[0.98]",
-                    "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-                  )}
-                >
-                  <ArrowRight className="h-5 w-5" />
-                  <span>חזרה</span>
-                </button>
-                <button
                   type="submit"
-                  disabled={
-                    !isValid || 
-                    isSubmitting || 
-                    isCheckingAvailability ||
-                    !selectedDate ||
-                    qualifiedAgents.length === 0
-                  }
+                  disabled={!isValid || isSubmitting}
                   className={cn(
                     "flex flex-[2] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-white",
                     "hover:bg-primary/90 active:scale-[0.98]",
@@ -922,15 +681,21 @@ export function LeadForm() {
                   )}
                 >
                   {isSubmitting ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>טוען...</span>
+                    </>
                   ) : (
-                    <Calendar className="h-5 w-5" />
+                    <>
+                      <Calendar className="h-5 w-5" />
+                      <span>קביעת פגישה</span>
+                    </>
                   )}
-                  <span>{isSubmitting ? "טוען..." : "קביעת פגישה"}</span>
                 </button>
               </div>
             </div>
           )}
+
         </form>
       )}
       </div>
@@ -938,7 +703,7 @@ export function LeadForm() {
       {/* Success overlay */}
       {bookingComplete && (
         <div className="absolute inset-0 flex items-center justify-center p-4">
-          <div className="animate-fade-in rounded-2xl bg-white p-8 shadow-xl text-center space-y-6 max-w-md w-full">
+          <div className="animate-fade-in rounded-2xl bg-white p-8 shadow-xl text-center space-y-6 max-w-lg w-full">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
               <CheckCircle className="h-10 w-10 text-green-600" />
             </div>
@@ -950,7 +715,7 @@ export function LeadForm() {
             {/* Meeting Details */}
             <div className="rounded-xl bg-gray-50 p-5 text-right">
               <div className="flex items-center justify-between border-b border-gray-100 py-3">
-                <span className="text-sm text-gray-500">נציג/ה</span>
+                <span className="text-sm text-gray-500">סוכן/ת</span>
                 <span className="font-medium text-primary">{bookingDetails?.agentName || "-"}</span>
               </div>
               <div className="flex items-center justify-between border-b border-gray-100 py-3">
@@ -962,9 +727,11 @@ export function LeadForm() {
                 <span className="font-medium text-primary" dir="ltr">
                   {bookingDetails?.startTime && bookingDetails?.endTime ? (
                     <>
-                      {format(new Date(bookingDetails.startTime), "dd.MM.yyyy")}
-                      <span className="mx-2">●</span>
                       {format(new Date(bookingDetails.startTime), "HH:mm")} - {format(new Date(bookingDetails.endTime), "HH:mm")}
+                      <span className="mx-2">●</span>
+                      <span dir="rtl">{getHebrewDayName(new Date(bookingDetails.startTime))}</span>
+                      <span className="mx-2">●</span>
+                      {format(new Date(bookingDetails.startTime), "dd.MM.yyyy")}
                     </>
                   ) : "-"}
                 </span>

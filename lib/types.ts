@@ -94,3 +94,8 @@ export interface BookingDetails {
   startTime: string;
   endTime: string;
 }
+
+export interface User {
+  username: string;
+  name: string;
+}

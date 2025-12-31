@@ -2,44 +2,58 @@
 
 import { useState, useEffect, startTransition } from "react";
 import { cn } from "@/lib/utils";
-import { Lock, Eye, EyeOff } from "lucide-react";
+import { Lock, Eye, EyeOff, User as UserIcon } from "lucide-react";
+import type { User } from "@/lib/types";
 
 const AUTH_KEY = "hitech-auth";
-const AUTH_EXPIRY_HOURS = 24;
 
-interface PasswordGateProps {
+interface LoginGateProps {
   children: React.ReactNode;
 }
 
-function isAuthenticated(): boolean {
-  if (typeof window === "undefined") return false;
+function getStoredUser(): User | null {
+  if (typeof window === "undefined") return null;
 
   const authData = localStorage.getItem(AUTH_KEY);
-  if (!authData) return false;
+  if (!authData) return null;
 
   try {
-    const { expiry } = JSON.parse(authData);
-    return Date.now() < expiry;
+    const user = JSON.parse(authData) as User;
+    // Validate that required fields exist
+    if (user.username && user.name) {
+      return user;
+    }
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-function setAuthenticated(): void {
-  const expiry = Date.now() + AUTH_EXPIRY_HOURS * 60 * 60 * 1000;
-  localStorage.setItem(AUTH_KEY, JSON.stringify({ expiry }));
+function setStoredUser(user: User): void {
+  localStorage.setItem(AUTH_KEY, JSON.stringify(user));
 }
 
-export function PasswordGate({ children }: PasswordGateProps) {
+// Export for use in other components
+export function getCurrentUser(): User | null {
+  return getStoredUser();
+}
+
+export function LoginGate({ children }: LoginGateProps) {
   const [isAuthed, setIsAuthed] = useState(false);
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
+    // TODO: I WILL REMOVE THIS MANUALLY - Testing only: force login on every refresh
+    // localStorage.removeItem(AUTH_KEY);
+    // END TODO
+
     startTransition(() => {
-      setIsAuthed(isAuthenticated());
+      setIsAuthed(getStoredUser() !== null);
       setLoading(false);
     });
   }, []);
@@ -47,18 +61,30 @@ export function PasswordGate({ children }: PasswordGateProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSubmitting(true);
 
-    const res = await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
 
-    if (res.ok) {
-      setAuthenticated();
-      setIsAuthed(true);
-    } else {
-      setError("סיסמה שגויה");
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setStoredUser({
+          username: data.username,
+          name: data.name,
+        });
+        setIsAuthed(true);
+      } else {
+        setError("שם משתמש או סיסמה שגויים");
+      }
+    } catch {
+      setError("שגיאה בהתחברות, נסה שוב");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -88,10 +114,29 @@ export function PasswordGate({ children }: PasswordGateProps) {
             הייטק סוכנות לביטוח
           </h1>
           <p className="mb-6 text-center text-gray-500">
-            הזן סיסמה כדי להמשיך
+            הזן פרטי התחברות כדי להמשיך
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative">
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="שם משתמש"
+                className={cn(
+                  "w-full rounded-xl border-2 bg-gray-50 px-4 py-3 pl-12 transition-all",
+                  "focus:border-accent focus:bg-white focus:outline-none",
+                  error ? "border-error" : "border-transparent"
+                )}
+                autoFocus
+                disabled={submitting}
+              />
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <UserIcon size={20} />
+              </div>
+            </div>
+
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -100,15 +145,16 @@ export function PasswordGate({ children }: PasswordGateProps) {
                 placeholder="סיסמה"
                 className={cn(
                   "w-full rounded-xl border-2 bg-gray-50 px-4 py-3 pl-12 transition-all",
-                  "focus:border-accent focus:bg-white",
+                  "focus:border-accent focus:bg-white focus:outline-none",
                   error ? "border-error" : "border-transparent"
                 )}
-                autoFocus
+                disabled={submitting}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                disabled={submitting}
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
@@ -125,9 +171,16 @@ export function PasswordGate({ children }: PasswordGateProps) {
                 "hover:bg-primary/90 active:scale-[0.98]",
                 "disabled:cursor-not-allowed disabled:opacity-50"
               )}
-              disabled={!password}
+              disabled={!username || !password || submitting}
             >
-              כניסה
+              {submitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  מתחבר...
+                </span>
+              ) : (
+                "כניסה"
+              )}
             </button>
           </form>
         </div>
