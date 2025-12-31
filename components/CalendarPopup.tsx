@@ -69,6 +69,7 @@ export function CalendarPopup({
         style={{ width: "100%", height: "100%", overflow: "auto" }}
         config={{
           layout: "month_view",
+          language: "he",
           ...(prefillData.name && { name: prefillData.name }),
           ...(prefillData.email && { email: prefillData.email }),
           ...(guests.length > 0 && { guests }),
