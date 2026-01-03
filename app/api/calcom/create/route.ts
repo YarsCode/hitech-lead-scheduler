@@ -79,11 +79,7 @@ export async function POST(request: NextRequest) {
     const title = `${customerFullName || "לקוח"}, פגישה עם ${agentName || "סוכן"} בנושא ${interestName || "ביטוח"}`;
 
     // Simple description for email - Cal.com will handle the details
-    const description = `היי,
-נקבעה לנו שיחה במועד זה בנושא ${interestName || "ביטוח"} בתיק שלך.
-אם יש שינוי בתוכניות – אפשר לעדכן כאן או ישירות בנייד שלי ${agentPhone || ""}
-
-ניפגש!`;
+    const description = `פגישה עם הייטק ביטוח`;
 
     // Build locations array based on meeting type
     const locations = isInPersonMeeting && address
