@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 const AIRTABLE_API_TOKEN = process.env.AIRTABLE_API_TOKEN;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const USERS_TABLE_ID = process.env.AIRTABLE_USERS_TABLE_ID;
+
+const authSchema = z.object({
+  username: z.string().min(1).max(50),
+  password: z.string().min(1).max(100),
+});
 
 interface AirtableUserRecord {
   id: string;
@@ -17,15 +23,21 @@ interface AirtableUsersResponse {
   records: AirtableUserRecord[];
 }
 
-export async function POST(request: NextRequest) {
-  const { username, password } = await request.json();
+function sanitizeForAirtableFormula(input: string): string {
+  return input.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
 
-  if (!username || !password) {
+export async function POST(request: NextRequest) {
+  const parsed = authSchema.safeParse(await request.json());
+
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "Missing username or password" },
+      { error: "Invalid credentials" },
       { status: 400 }
     );
   }
+
+  const { username, password } = parsed.data;
 
   if (!AIRTABLE_API_TOKEN || !AIRTABLE_BASE_ID || !USERS_TABLE_ID) {
     console.error("Missing Airtable configuration for auth");
@@ -36,8 +48,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Query Airtable for matching username and password
-    const filterFormula = `AND({שם משתמש}="${username}",{סיסמא}="${password}")`;
+    const safeUsername = sanitizeForAirtableFormula(username);
+    const safePassword = sanitizeForAirtableFormula(password);
+    const filterFormula = `AND({שם משתמש}="${safeUsername}",{סיסמא}="${safePassword}")`;
     const url = new URL(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${USERS_TABLE_ID}`
     );

@@ -48,9 +48,7 @@ export function LoginGate({ children }: LoginGateProps) {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    // TODO: I WILL REMOVE THIS MANUALLY - Testing only: force login on every refresh
     // localStorage.removeItem(AUTH_KEY);
-    // END TODO
 
     startTransition(() => {
       setIsAuthed(getStoredUser() !== null);

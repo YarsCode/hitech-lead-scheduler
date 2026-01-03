@@ -4,6 +4,11 @@ import { useEffect } from "react";
 import Cal, { getCalApi } from "@calcom/embed-react";
 import type { BookingDetails } from "@/lib/types";
 
+// Toggle to use fake emails (prevents Cal.com confirmation emails)
+// When true, real emails are only passed via metadata to webhook for custom email handling
+const USE_FAKE_EMAILS = false;
+const FAKE_BOOKING_EMAIL = "noreply@booking.invalid";
+
 interface PrefillData {
   name?: string;
   email?: string;
@@ -59,8 +64,13 @@ export function CalendarPopup({
     })();
   }, [onBookingSuccess, onBookingError]);
 
-  // Add guest email if there's an additional lead with email
-  const guests = prefillData.additionalEmail ? [prefillData.additionalEmail] : [];
+  // Build guest list - use fake or real email based on toggle
+  const guests = prefillData.additionalEmail 
+    ? [USE_FAKE_EMAILS ? FAKE_BOOKING_EMAIL : prefillData.additionalEmail] 
+    : [];
+
+  // Determine email to use - fake or real based on toggle
+  const bookingEmail = USE_FAKE_EMAILS ? FAKE_BOOKING_EMAIL : prefillData.email;
 
   return (
     <div className="h-[800px] md:h-[540px] w-full overflow-hidden rounded-xl border border-border">
@@ -71,7 +81,7 @@ export function CalendarPopup({
           layout: "month_view",
           language: "he",
           ...(prefillData.name && { name: prefillData.name }),
-          ...(prefillData.email && { email: prefillData.email }),
+          ...(bookingEmail && { email: bookingEmail }),
           ...(guests.length > 0 && { guests }),
         }}
       />

@@ -318,12 +318,17 @@ export function LeadForm() {
         customerId: validatedPrimaryLead?.customerId,
         additionalCustomerId: validatedAdditionalLead?.customerId,
         customerFullName: validatedPrimaryLead?.fullName,
+        customerEmail: validatedPrimaryLead?.email,
+        additionalCustomerFullName: validatedAdditionalLead?.fullName,
+        additionalCustomerEmail: validatedAdditionalLead?.email,
         agentName: selectedAgent?.name,
         agentPhone: selectedAgent?.phone,
         interestName: validatedPrimaryLead?.interestName,
         hosts,
         isInPersonMeeting: data.isInPersonMeeting,
         address: data.address,
+        customerCellNumber: validatedPrimaryLead?.cellNumber,
+        customerIdNumber: validatedPrimaryLead?.idNumber,
       }),
     });
 
@@ -361,7 +366,7 @@ export function LeadForm() {
   };
 
   const handleBookingSuccess = useCallback(async (details: BookingDetails) => {
-    await deleteEventType(eventTypeId);
+    // await deleteEventType(eventTypeId);
     setEventTypeId(null);
     setShowCalendar(false);
     setBookingDetails(details);

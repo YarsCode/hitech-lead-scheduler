@@ -25,11 +25,14 @@ export interface SpecializationsResponse {
 export interface CreateEventTypeRequest {
   primaryLeadNumber: string;
   additionalLeadNumber?: string;
-  leadId?: number;
-  additionalLeadId?: number;
-  customerId?: number;
-  additionalCustomerId?: number;
+  leadId?: string;
+  additionalLeadId?: string;
+  customerId?: string;
+  additionalCustomerId?: string;
   customerFullName?: string;
+  customerEmail?: string;
+  additionalCustomerFullName?: string;
+  additionalCustomerEmail?: string;
   agentName?: string;
   agentPhone?: string;
   interestName?: string;
@@ -70,11 +73,13 @@ export interface BookingsResponse {
 
 export interface ValidatedLead {
   number: number;
-  id?: number;
-  customerId?: number;
+  id?: string;
+  customerId?: string;
   fullName: string;
   email?: string;
   interestName?: string;
+  cellNumber?: string;
+  idNumber?: string;
 }
 
 export interface ValidateLeadsRequest {

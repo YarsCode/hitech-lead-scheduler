@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { ValidateLeadsRequest, ValidateLeadsResponse, ValidatedLead } from "@/lib/types";
+import { z } from "zod";
+import type { ValidateLeadsResponse, ValidatedLead } from "@/lib/types";
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 const N8N_WEBHOOK_AUTH = process.env.N8N_WEBHOOK_AUTH;
 
 const LEADS_NOT_FOUND_ERROR = "מספר/י הליד/ים לא נמצאו, או שיש תקלה זמנית במערכת";
 
+const validateLeadsSchema = z.object({
+  primaryLeadNumber: z.string().min(1).max(50),
+  additionalLeadNumber: z.string().max(50).nullish(),
+});
+
 interface WebhookLeadResult {
   number: number;
-  id?: number;
-  customerId?: number;
+  id?: string;
+  customerId?: string;
   fullName?: string;
   firstName?: string;
   lastName?: string;
   email?: string;
   interestName?: string;
+  cellNumber?: string;
+  idNumber?: string;
 }
 
 interface WebhookResponse {
@@ -31,6 +39,8 @@ function buildValidatedLead(lead: WebhookLeadResult): ValidatedLead {
     fullName: lead.fullName || `${lead.firstName || ""} ${lead.lastName || ""}`.trim(),
     email: lead.email,
     interestName: lead.interestName,
+    cellNumber: lead.cellNumber,
+    idNumber: lead.idNumber,
   };
 }
 
@@ -44,15 +54,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body: ValidateLeadsRequest = await request.json();
-    const { primaryLeadNumber, additionalLeadNumber } = body;
+    const parsed = validateLeadsSchema.safeParse(await request.json());
 
-    if (!primaryLeadNumber) {
+    if (!parsed.success) {
       return NextResponse.json<ValidateLeadsResponse>(
         { success: false, error: "חסר מספר ליד ראשי" },
         { status: 400 }
       );
     }
+
+    const { primaryLeadNumber, additionalLeadNumber } = parsed.data;
 
     const webhookBody: Record<string, string> = { primaryLeadNumber };
     if (additionalLeadNumber) {
