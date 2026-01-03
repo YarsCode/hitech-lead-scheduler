@@ -124,10 +124,7 @@ export async function POST(request: NextRequest) {
       bookingWindow: {
         type: "calendarDays",
         value: 21,
-      },
-      emailSettings: {
-        disableEmailsToAttendees: true,
-      },
+      }
     };
 
     // Create event type via Cal.com API v2
