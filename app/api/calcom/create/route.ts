@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const slug = `meeting-${timestamp}`;
 
     // Build title - used for both event type and email
-    const title = `${customerFullName || "לקוח"}, פגישה עם ${agentName || "סוכן"} בנושא ${interestName || "ביטוח"}`;
+    const title = `${customerFullName || "לקוח"}, פגישה עם ${agentName || "הייטק סוכנות לביטוח"} בנושא ${interestName || "ביטוח"}`;
 
     // Simple description for email - Cal.com will handle the details
     const description = `פגישה עם הייטק ביטוח`;
