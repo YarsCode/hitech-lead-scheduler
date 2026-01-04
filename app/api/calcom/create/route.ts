@@ -105,6 +105,8 @@ export async function POST(request: NextRequest) {
       description,
       customName: title,
       schedulingType: "ROUND_ROBIN",
+      beforeEventBuffer: 30,
+      afterEventBuffer: 30,
       hosts: hosts.map((h) => ({
         userId: Number(h.userId),
         weight: h.weight,
