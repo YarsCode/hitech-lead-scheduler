@@ -626,7 +626,10 @@ export function LeadForm() {
                   <div className="space-y-5 animate-slide-down">
                     <SearchableSelect
                       label="התמחות"
-                      options={specializations.map((s) => ({ value: s.name, label: s.name }))}
+                      options={[
+                        { value: "", label: "הכל" },
+                        ...specializations.map((s) => ({ value: s.name, label: s.name }))
+                      ]}
                       value={specializationForManualMode || ""}
                       onChange={(value) => setValue("specializationForManualMode", value, { shouldValidate: true })}
                       placeholder="סנן לפי התמחות"
