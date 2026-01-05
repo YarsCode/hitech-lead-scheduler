@@ -157,6 +157,7 @@ export async function GET(request: NextRequest) {
   const specialization = searchParams.get("specialization");
   const interest = searchParams.get("interest");
   const evenDistribution = searchParams.get("evenDistribution") === "true";
+  const isManualMode = searchParams.get("manual") === "true";
 
   if (!AIRTABLE_API_TOKEN || !AIRTABLE_BASE_ID || !AGENTS_TABLE_ID) {
     return NextResponse.json({ error: "Missing Airtable configuration" }, { status: 500 });
@@ -169,7 +170,7 @@ export async function GET(request: NextRequest) {
         cache: "no-store",
       }),
       getCalcomTeamMembers(),
-      getBookingCounts(),
+      isManualMode ? Promise.resolve({ currentMonth: {}, nextMonth: {} }) : getBookingCounts(),
     ]);
 
     if (!airtableResponse.ok) {
@@ -180,22 +181,28 @@ export async function GET(request: NextRequest) {
 
     const matchedRecords: RecordWithUserId[] = records
       .map((record) => ({ record, userId: calcomEmailToUserId.get(record.fields["מייל"]?.toLowerCase() ?? "") }))
-      .filter((r): r is RecordWithUserId => 
-        r.userId !== undefined &&
-        r.record.fields["רמזור"] !== FORBIDDEN_TRAFFIC_LIGHT_STATUS &&
-        !(specialization && r.record.fields[specialization] === true) &&
-        !(interest && r.record.fields[interest] === true)
-      );
+      .filter((r): r is RecordWithUserId => {
+        if (r.userId === undefined) return false;
+        if (isManualMode) return !(specialization && r.record.fields[specialization] === true);
+        return (
+          r.record.fields["רמזור"] !== FORBIDDEN_TRAFFIC_LIGHT_STATUS &&
+          !(specialization && r.record.fields[specialization] === true) &&
+          !(interest && r.record.fields[interest] === true)
+        );
+      });
 
-    const primaryPool = matchedRecords.filter(({ record, userId }) => !isAtMonthlyLimit(record, userId, bookingCounts));
-    const fallbackPool = matchedRecords.filter(({ record, userId }) => isAtMonthlyLimit(record, userId, bookingCounts));
-    const selectedRecords = primaryPool.length > 0 ? primaryPool : fallbackPool;
+    let selectedRecords = matchedRecords;
+    if (!isManualMode) {
+      const primaryPool = matchedRecords.filter(({ record, userId }) => !isAtMonthlyLimit(record, userId, bookingCounts));
+      const fallbackPool = matchedRecords.filter(({ record, userId }) => isAtMonthlyLimit(record, userId, bookingCounts));
+      selectedRecords = primaryPool.length > 0 ? primaryPool : fallbackPool;
+    }
 
     let agents = selectedRecords
       .map(({ record, userId }) => mapRecordToAgent(record, userId))
       .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
-    if (evenDistribution && agents.length > 1) {
+    if (!isManualMode && evenDistribution && agents.length > 1) {
       agents = applyEvenDistribution(agents, bookingCounts);
     }
 

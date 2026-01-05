@@ -85,13 +85,10 @@ export function LeadForm() {
   const specializationForManualMode = watch("specializationForManualMode");
   const agentId = watch("agentId");
 
-  // Get the active specialization for manual mode filtering
   const activeSpecialization = agentSelectionMode === "manual" ? specializationForManualMode : "";
 
-  // Use custom hooks for data fetching
-  // Note: Even distribution filtering is done separately in handleContinueToPart3, not here
   const { specializations, loading: loadingSpecializations } = useSpecializations();
-  const { agents, loading: loadingAgents } = useAgents(activeSpecialization ?? "", false);
+  const { agents, loading: loadingAgents } = useAgents(activeSpecialization ?? "", false, agentSelectionMode === "manual");
   
   // Filter agents to only those with a Cal.com userId (required for booking)
   const agentsWithUserId = agents.filter((agent) => agent.userId !== undefined && agent.userId !== null);

@@ -81,11 +81,6 @@ export async function POST(request: NextRequest) {
     // Simple description for email - Cal.com will handle the details
     const description = `פגישה עם הייטק ביטוח`;
 
-    // Build locations array based on meeting type
-    const locations = isInPersonMeeting && address
-      ? [{ type: "address", address, public: true }]
-      : [{ type: "integration", integration: "cal-video" }];
-
     // Store lead IDs, customer IDs, and address as metadata to pass to webhook without showing in email
     const metadata = {
       primaryLeadNumber: body.primaryLeadNumber,
@@ -111,7 +106,9 @@ export async function POST(request: NextRequest) {
         userId: Number(h.userId),
         weight: h.weight,
       })),
-      locations,
+      ...(isInPersonMeeting && address && {
+        locations: [{ type: "address", address, public: true }],
+      }),
       metadata,
       bookingFields: [
         {
