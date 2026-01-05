@@ -92,11 +92,6 @@ export async function POST(request: NextRequest) {
       ...(address && { address }),
     };
 
-    // Build locations: in-person uses address, remote uses host's default conferencing app
-    const locations = isInPersonMeeting && address
-      ? [{ type: "address", address, public: true }]
-      : [{ type: "conferencing" }];
-
     // Build Cal.com API request - 60 min for couple meetings, 30 min for single
     const eventTypePayload = {
       lengthInMinutes: additionalLeadNumber ? 60 : 30,
@@ -111,7 +106,9 @@ export async function POST(request: NextRequest) {
         userId: Number(h.userId),
         weight: h.weight,
       })),
-      locations,
+      ...(isInPersonMeeting && address && {
+        locations: [{ type: "address", address, public: true }],
+      }),
       metadata,
       bookingFields: [
         {
