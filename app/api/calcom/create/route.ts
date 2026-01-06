@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
         headers: {
           "Authorization": `Bearer ${CALCOM_API_KEY}`,
           "Content-Type": "application/json",
+          "cal-api-version": "2024-06-14",
         },
         body: JSON.stringify(eventTypePayload),
       }
