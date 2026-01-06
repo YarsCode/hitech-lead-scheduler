@@ -55,7 +55,7 @@ async function getCalcomTeamMembers(): Promise<Map<string, number>> {
   try {
     const response = await fetch(
       `https://api.cal.com/v2/teams/${CALCOM_TEAM_ID}/memberships`,
-      { headers: { Authorization: `Bearer ${CALCOM_API_KEY}`, "Content-Type": "application/json" }, cache: "no-store" }
+      { headers: { Authorization: `Bearer ${CALCOM_API_KEY}`, "Content-Type": "application/json", "cal-api-version": "2024-06-14" }, cache: "no-store" }
     );
     if (!response.ok) return membershipsCache?.data ?? emailToUserId;
 
@@ -87,28 +87,27 @@ async function getBookingCounts(): Promise<BookingCounts> {
   const beforeEnd = new Date(Date.UTC(nextYear, nextMonth + 1, 0, 23, 59, 59)).toISOString().replace(".000Z", "Z");
 
   const bookingCounts: BookingCounts = { currentMonth: {}, nextMonth: {} };
-  let page = 1;
-  let hasMore = true;
+  let cursor: number | undefined;
 
   try {
-    while (hasMore) {
+    while (true) {
       const url = new URL("https://api.cal.com/v2/bookings");
       url.searchParams.set("afterStart", afterStart);
       url.searchParams.set("beforeEnd", beforeEnd);
       url.searchParams.set("status", "upcoming,recurring,past");
       url.searchParams.set("take", "100");
-      url.searchParams.set("page", page.toString());
+      if (cursor) url.searchParams.set("cursor", cursor.toString());
 
       const response = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${CALCOM_API_KEY}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${CALCOM_API_KEY}`, "Content-Type": "application/json", "cal-api-version": "2024-06-14" },
         cache: "no-store",
       });
       if (!response.ok) return empty;
 
       const data = await response.json();
-      const bookings = data.data?.bookings;
+      const bookings = data.data?.bookings ?? [];
 
-      (bookings ?? [])
+      bookings
         .filter((b: { user?: { id?: number }; startTime?: string }) => b.user?.id && b.startTime)
         .forEach((b: { user: { id: number }; startTime: string }) => {
           const bookingDate = new Date(b.startTime);
@@ -121,8 +120,9 @@ async function getBookingCounts(): Promise<BookingCounts> {
             bookingCounts.nextMonth[b.user.id] = (bookingCounts.nextMonth[b.user.id] || 0) + 1;
           }
         });
-      hasMore = data.data?.nextCursor != null;
-      page++;
+
+      cursor = data.data?.nextCursor;
+      if (!cursor) break;
     }
   } catch {
     console.error("Error fetching bookings from Cal.com");

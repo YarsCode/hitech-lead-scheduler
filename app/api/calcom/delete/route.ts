@@ -19,6 +19,7 @@ async function deleteEventType(eventTypeId: string) {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${CALCOM_API_KEY}`,
+          "cal-api-version": "2024-06-14",
         },
       }
     );
