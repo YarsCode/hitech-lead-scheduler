@@ -6,7 +6,7 @@ import type { BookingDetails } from "@/lib/types";
 
 // Toggle to use fake emails (prevents Cal.com confirmation emails)
 // When true, real emails are only passed via metadata to webhook for custom email handling
-const USE_FAKE_EMAILS = false;
+const USE_FAKE_EMAILS = true;
 const FAKE_BOOKING_EMAIL = "noreply@booking.invalid";
 
 interface PrefillData {
