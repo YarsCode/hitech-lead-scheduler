@@ -49,28 +49,6 @@ export interface CreateEventTypeResponse {
   title: string;
 }
 
-export interface CalcomBookingHost {
-  id: number;
-  name: string;
-  email: string;
-  username: string;
-  timeZone: string;
-}
-
-export interface CalcomBooking {
-  id: number;
-  uid: string;
-  title: string;
-  hosts: CalcomBookingHost[];
-  status: string;
-  start: string;
-  end: string;
-}
-
-export interface BookingsResponse {
-  hostUserIds: number[];
-}
-
 export interface ValidatedLead {
   number: number;
   id?: string;

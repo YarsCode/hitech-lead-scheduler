@@ -9,6 +9,9 @@ const CALCOM_TEAM_ID = process.env.CALCOM_TEAM_ID;
 
 const FORBIDDEN_TRAFFIC_LIGHT_STATUS = "🔴";
 const EVEN_DISTRIBUTION_GAP_THRESHOLD = 3;
+const MEMBERSHIPS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+let membershipsCache: { data: Map<string, number>; timestamp: number } | null = null;
 
 interface AirtableAgentRecord {
   id: string;
@@ -42,6 +45,10 @@ interface CalcomTeamMember {
 type RecordWithUserId = { record: AirtableAgentRecord; userId: number };
 
 async function getCalcomTeamMembers(): Promise<Map<string, number>> {
+  if (membershipsCache && Date.now() - membershipsCache.timestamp < MEMBERSHIPS_CACHE_TTL_MS) {
+    return membershipsCache.data;
+  }
+
   const emailToUserId = new Map<string, number>();
   if (!CALCOM_API_KEY || !CALCOM_TEAM_ID) return emailToUserId;
 
@@ -50,14 +57,17 @@ async function getCalcomTeamMembers(): Promise<Map<string, number>> {
       `https://api.cal.com/v2/teams/${CALCOM_TEAM_ID}/memberships`,
       { headers: { Authorization: `Bearer ${CALCOM_API_KEY}`, "Content-Type": "application/json" }, cache: "no-store" }
     );
-    if (!response.ok) return emailToUserId;
+    if (!response.ok) return membershipsCache?.data ?? emailToUserId;
 
     const { data } = await response.json() as { data: CalcomTeamMember[] };
     data
       .filter((m) => m.accepted && m.user?.email)
       .forEach((m) => emailToUserId.set(m.user.email.toLowerCase(), m.userId));
+    
+    membershipsCache = { data: emailToUserId, timestamp: Date.now() };
   } catch {
     console.error("Error fetching Cal.com team members");
+    if (membershipsCache) return membershipsCache.data;
   }
   return emailToUserId;
 }
