@@ -91,6 +91,8 @@ export async function POST(request: NextRequest) {
       ...(customerId && { customerId }),
       ...(additionalCustomerId && { additionalCustomerId }),
       ...(address && { address }),
+      ...(customerCellNumber && { customerCellNumber }),
+      ...(body.additionalCustomerCellNumber && { additionalCustomerCellNumber: body.additionalCustomerCellNumber }),
     };
 
     // Build Cal.com API request - 60 min for couple meetings, 30 min for single
