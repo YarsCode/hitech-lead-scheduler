@@ -325,6 +325,7 @@ export function LeadForm() {
         isInPersonMeeting: data.isInPersonMeeting,
         address: data.address,
         customerCellNumber: validatedPrimaryLead?.cellNumber,
+        additionalCustomerCellNumber: validatedAdditionalLead?.cellNumber,
         customerIdNumber: validatedPrimaryLead?.idNumber,
       }),
     });

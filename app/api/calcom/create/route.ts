@@ -30,6 +30,7 @@ const createEventSchema = z.object({
   isInPersonMeeting: z.boolean().nullish(),
   address: z.string().nullish(),
   customerCellNumber: z.string().nullish(),
+  additionalCustomerCellNumber: z.string().nullish(),
   customerIdNumber: z.string().nullish(),
 }).refine(
   (data) => !data.isInPersonMeeting || (data.address && data.address.trim() !== ""),
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
     const surenseSubject = `פגישה ${meetingType} עם ${agentName || "סוכן"} ללקוח ${customerFullName || "לקוח"} ${customerIdNumber || ""} (${formattedCellNumber})`;
 
     // Collect all metadata fields that should be passed as URL parameters
-    // Customer emails are included here for webhook to send custom confirmation emails
+    // Customer emails and cell numbers are included here for webhook to send custom confirmation emails/SMS
     const metadataFields = {
       primaryLeadNumber: body.primaryLeadNumber,
       additionalLeadNumber,
@@ -175,8 +176,10 @@ export async function POST(request: NextRequest) {
       additionalCustomerId: additionalCustomerId?.toString(),
       customerFullName,
       customerEmail,
+      customerCellNumber,
       additionalCustomerFullName,
       additionalCustomerEmail,
+      additionalCustomerCellNumber: body.additionalCustomerCellNumber,
       meetingAddress: isInPersonMeeting ? address : undefined,
       dailyLimits: Object.keys(dailyLimitsMap).length > 0 ? JSON.stringify(dailyLimitsMap) : undefined,
       surenseSubject,
