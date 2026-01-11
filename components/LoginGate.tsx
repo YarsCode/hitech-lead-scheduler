@@ -38,6 +38,11 @@ export function getCurrentUser(): User | null {
   return getStoredUser();
 }
 
+export function logout(): void {
+  localStorage.removeItem(AUTH_KEY);
+  window.location.reload();
+}
+
 export function LoginGate({ children }: LoginGateProps) {
   const [isAuthed, setIsAuthed] = useState(false);
   const [username, setUsername] = useState("");
