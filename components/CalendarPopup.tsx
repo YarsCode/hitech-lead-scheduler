@@ -18,6 +18,7 @@ interface PrefillData {
 interface CalendarPopupProps {
   bookingLink: string;
   prefillData: PrefillData;
+  preselectedDate?: string; // YYYY-MM-DD format for Cal.com date param
   onBookingSuccess: (details: BookingDetails) => void;
   onBookingError: () => void;
 }
@@ -25,6 +26,7 @@ interface CalendarPopupProps {
 export function CalendarPopup({
   bookingLink,
   prefillData,
+  preselectedDate,
   onBookingSuccess,
   onBookingError,
 }: CalendarPopupProps) {
@@ -83,6 +85,7 @@ export function CalendarPopup({
           ...(prefillData.name && { name: prefillData.name }),
           ...(bookingEmail && { email: bookingEmail }),
           ...(guests.length > 0 && { guests }),
+          ...(preselectedDate && { date: preselectedDate }),
         }}
       />
     </div>

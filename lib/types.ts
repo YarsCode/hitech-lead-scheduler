@@ -82,3 +82,13 @@ export interface User {
   username: string;
   name: string;
 }
+
+export interface SpouseMeetingResponse {
+  success: boolean;
+  meeting?: {
+    agentEmail: string;
+    startDate: string;
+    endDate: string;
+  };
+  error?: string;
+}

@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { leadFormSchema, leadFormPart1Schema, type LeadFormData, type AgentSelectionMode } from "@/lib/validations";
-import type { Agent, ValidateLeadsResponse, ValidatedLead, BookingDetails } from "@/lib/types";
+import type { Agent, ValidateLeadsResponse, ValidatedLead, BookingDetails, SpouseMeetingResponse } from "@/lib/types";
 import { useSpecializations } from "@/hooks/useSpecializations";
 import { useAgents } from "@/hooks/useAgents";
 import { CalendarPopup } from "./CalendarPopup";
@@ -53,6 +53,12 @@ export function LeadForm() {
 
   // Agent availability error (for auto mode)
   const [agentAvailabilityError, setAgentAvailabilityError] = useState<string>("");
+
+  // Spouse meeting data (when main lead has an existing meeting)
+  const [spouseMeetingData, setSpouseMeetingData] = useState<{
+    agentEmail: string;
+    meetingDate: string; // YYYY-MM-DD for Cal.com
+  } | null>(null);
 
   const {
     register,
@@ -174,11 +180,13 @@ export function LeadForm() {
     const isValid = await validatePart1();
     if (!isValid) return;
 
-    // Clear previous validation state
+    // Clear previous state
     setLeadValidationError("");
+    setSpouseMeetingData(null);
     setIsValidatingLeads(true);
 
     try {
+      // Validate leads
       const response = await fetch("/api/validate-leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -198,6 +206,27 @@ export function LeadForm() {
       // Store validated lead info for Cal.com prefill
       setValidatedPrimaryLead(data.primaryLead || null);
       setValidatedAdditionalLead(data.additionalLead || null);
+
+      // If spouse toggle is ON, fetch main lead's existing meeting
+      if (isCouplesMeeting && data.primaryLead?.id) {
+        const spouseResponse = await fetch("/api/spouse-meeting", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leadId: data.primaryLead.id }),
+        });
+
+        const spouseData: SpouseMeetingResponse = await spouseResponse.json();
+
+        if (spouseData.success && spouseData.meeting) {
+          const meetingDate = spouseData.meeting.endDate.split("T")[0];
+          setSpouseMeetingData({
+            agentEmail: spouseData.meeting.agentEmail,
+            meetingDate,
+          });
+          setIsValidatingLeads(false);
+          return;
+        }
+      }
 
       setCurrentPart(2);
     } catch (error) {
@@ -303,7 +332,7 @@ export function LeadForm() {
     }));
   };
 
-  const createCalcomEventType = async (data: LeadFormData, hosts: { userId: number; weight: number }[]) => {
+  const createCalcomEventType = async (data: LeadFormData, hosts: { userId: number; weight: number }[], isSpouseBooking = false) => {
     const response = await fetch("/api/calcom/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -327,6 +356,7 @@ export function LeadForm() {
         customerCellNumber: validatedPrimaryLead?.cellNumber,
         additionalCustomerCellNumber: validatedAdditionalLead?.cellNumber,
         customerIdNumber: validatedPrimaryLead?.idNumber,
+        isSpouseBooking,
       }),
     });
 
@@ -338,6 +368,65 @@ export function LeadForm() {
 
     return response.json();
   };
+
+  // Handle spouse booking when meeting data is found (skips Part 2)
+  useEffect(() => {
+    if (!spouseMeetingData) return;
+
+    const handleSpouseBooking = async () => {
+      setIsSubmitting(true);
+      try {
+        // Fetch all agents (bypass filters for spouse booking - ignore traffic light & limits)
+        const agentsResponse = await fetch("/api/agents?bypassFilters=true");
+        const agentsData = await agentsResponse.json();
+        const allAgents: Agent[] = agentsData.agents || [];
+
+        const matchedAgent = allAgents.find(
+          (a) => a.email?.toLowerCase() === spouseMeetingData.agentEmail.toLowerCase()
+        );
+
+        if (!matchedAgent?.userId) {
+          // Agent not found or has no Cal.com userId - fall back to normal flow
+          setSpouseMeetingData(null);
+          setCurrentPart(2);
+          setIsSubmitting(false);
+          return;
+        }
+
+        setSelectedAgent(matchedAgent);
+
+        // Create event type with this specific agent (no buffers for spouse booking)
+        const hosts = [{ userId: matchedAgent.userId, weight: 100, email: matchedAgent.email, dailyLimit: matchedAgent.dailyLimit }];
+        const result = await createCalcomEventType(
+          {
+            primaryLeadNumber,
+            additionalLeadNumber,
+            isCouplesMeeting: true,
+            isInPersonMeeting,
+            address,
+            agentSelectionMode: "manual",
+            specializationForManualMode: "",
+            agentId: matchedAgent.id,
+          },
+          hosts,
+          true // isSpouseBooking - no buffers
+        );
+
+        setBookingLink(result.bookingLink);
+        setEventTypeId(result.eventTypeId);
+        setShowCalendar(true);
+      } catch (error) {
+        console.error("Error creating spouse booking:", error);
+        showErrorModal("אירעה שגיאה בטעינת היומן. אנא נסה שוב.");
+        setSpouseMeetingData(null);
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
+    handleSpouseBooking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spouseMeetingData]);
 
   const onSubmit = async (data: LeadFormData) => {
     setIsSubmitting(true);
@@ -364,7 +453,6 @@ export function LeadForm() {
   };
 
   const handleBookingSuccess = useCallback(async (details: BookingDetails) => {
-    // await deleteEventType(eventTypeId);
     setEventTypeId(null);
     setShowCalendar(false);
     setBookingDetails(details);
@@ -373,7 +461,7 @@ export function LeadForm() {
     if (agentSelectionMode === "manual") {
       documentManualAssignment(details.agentName);
     }
-  }, [eventTypeId, agentSelectionMode, deleteEventType]);
+  }, [agentSelectionMode]);
 
   const handleBookingError = useCallback(async () => {
     await deleteEventType(eventTypeId);
@@ -459,6 +547,7 @@ export function LeadForm() {
                 email: validatedPrimaryLead?.email,
                 additionalEmail: validatedAdditionalLead?.email,
               }}
+              preselectedDate={spouseMeetingData?.meetingDate}
               onBookingSuccess={handleBookingSuccess}
               onBookingError={handleBookingError}
             />
@@ -487,22 +576,22 @@ export function LeadForm() {
                 autoFocus
               />
 
-              {/* Additional Lead ID (conditional) */}
+              {/* Spouse Lead ID (conditional) */}
               {isCouplesMeeting && (
                 <TextInput
                   {...register("additionalLeadNumber")}
-                  label="מספר ליד נוסף*"
+                  label="מספר ליד בן/בת הזוג*"
                   error={errors.additionalLeadNumber?.message}
-                  placeholder="הזן מספר ליד נוסף"
+                  placeholder="הזן מספר ליד בן/בת הזוג"
                   className="animate-slide-down"
                   autoFocus
                 />
               )}
 
-              {/* Couples Meeting Toggle */}
+              {/* Spouse Toggle */}
               <div className="space-y-3">
                 <ToggleButton
-                  label="פגישה זוגית"
+                  label="בן/בת זוג"
                   icon={UserPlus}
                   checked={isCouplesMeeting}
                   onToggle={toggleCouplesMeeting}
@@ -587,7 +676,7 @@ export function LeadForm() {
                   />
                   {isCouplesMeeting && additionalLeadNumber && (
                     <SummaryItem 
-                      label="ליד נוסף" 
+                      label="ליד בן/בת הזוג" 
                       value={validatedAdditionalLead?.fullName 
                         ? `${validatedAdditionalLead.fullName} - ${additionalLeadNumber}` 
                         : additionalLeadNumber} 

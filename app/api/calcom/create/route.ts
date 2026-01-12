@@ -32,6 +32,7 @@ const createEventSchema = z.object({
   customerCellNumber: z.string().nullish(),
   additionalCustomerCellNumber: z.string().nullish(),
   customerIdNumber: z.string().nullish(),
+  isSpouseBooking: z.boolean().nullish(),
 }).refine(
   (data) => !data.isInPersonMeeting || (data.address && data.address.trim() !== ""),
   { message: "Address is required for in-person meetings", path: ["address"] }
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = parsed.data;
-    const { additionalLeadNumber, leadId, additionalLeadId, customerId, additionalCustomerId, customerFullName, customerEmail, additionalCustomerFullName, additionalCustomerEmail, agentName, agentPhone, interestName, hosts, isInPersonMeeting, address, customerCellNumber, customerIdNumber } = body;
+    const { additionalLeadNumber, leadId, additionalLeadId, customerId, additionalCustomerId, customerFullName, customerEmail, additionalCustomerFullName, additionalCustomerEmail, agentName, agentPhone, interestName, hosts, isInPersonMeeting, address, customerCellNumber, customerIdNumber, isSpouseBooking } = body;
 
     // Generate a unique slug (short and unique)
     const timestamp = Date.now().toString(36);
@@ -95,16 +96,17 @@ export async function POST(request: NextRequest) {
       ...(body.additionalCustomerCellNumber && { additionalCustomerCellNumber: body.additionalCustomerCellNumber }),
     };
 
-    // Build Cal.com API request - 60 min for couple meetings, 30 min for single
+    // Build Cal.com API request - 30 min meetings with 10 min slot intervals
     const eventTypePayload = {
-      lengthInMinutes: additionalLeadNumber ? 60 : 30,
+      lengthInMinutes: 30,
+      slotInterval: 10,
       title,
       slug,
       description,
       customName: title,
       schedulingType: "ROUND_ROBIN",
-      beforeEventBuffer: 30,
-      afterEventBuffer: 30,
+      beforeEventBuffer: isSpouseBooking ? 0 : 30,
+      afterEventBuffer: isSpouseBooking ? 0 : 30,
       hosts: hosts.map((h) => ({
         userId: Number(h.userId),
         weight: h.weight,

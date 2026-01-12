@@ -168,6 +168,7 @@ export async function GET(request: NextRequest) {
   const interest = searchParams.get("interest");
   const evenDistribution = searchParams.get("evenDistribution") === "true";
   const isManualMode = searchParams.get("manual") === "true";
+  const bypassFilters = searchParams.get("bypassFilters") === "true"; // For spouse booking - ignores traffic light & limits
 
   if (!AIRTABLE_API_TOKEN || !AIRTABLE_BASE_ID || !AGENTS_TABLE_ID) {
     return NextResponse.json({ error: "Missing Airtable configuration" }, { status: 500 });
@@ -193,6 +194,7 @@ export async function GET(request: NextRequest) {
       .map((record) => ({ record, userId: calcomEmailToUserId.get(record.fields["מייל"]?.toLowerCase() ?? "") }))
       .filter((r): r is RecordWithUserId => {
         if (r.userId === undefined) return false;
+        if (bypassFilters) return true; // Spouse mode - return all agents with userId
         if (isManualMode) return !(specialization && r.record.fields[specialization] === true);
         return (
           r.record.fields["רמזור"] !== FORBIDDEN_TRAFFIC_LIGHT_STATUS &&
@@ -202,7 +204,7 @@ export async function GET(request: NextRequest) {
       });
 
     let selectedRecords = matchedRecords;
-    if (!isManualMode) {
+    if (!isManualMode && !bypassFilters) {
       const primaryPool = matchedRecords.filter(({ record, userId }) => !isAtMonthlyLimit(record, userId, bookingCounts));
       const fallbackPool = matchedRecords.filter(({ record, userId }) => isAtMonthlyLimit(record, userId, bookingCounts));
       selectedRecords = primaryPool.length > 0 ? primaryPool : fallbackPool;
