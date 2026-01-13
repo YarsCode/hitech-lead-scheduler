@@ -96,10 +96,9 @@ export async function POST(request: NextRequest) {
       ...(body.additionalCustomerCellNumber && { additionalCustomerCellNumber: body.additionalCustomerCellNumber }),
     };
 
-    // Build Cal.com API request - 30 min meetings with 10 min slot intervals
+    // Build Cal.com API request - always 30 min
     const eventTypePayload = {
       lengthInMinutes: 30,
-      slotInterval: 10,
       title,
       slug,
       description,
