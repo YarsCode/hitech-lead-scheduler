@@ -357,6 +357,7 @@ export function LeadForm() {
         additionalCustomerCellNumber: validatedAdditionalLead?.cellNumber,
         customerIdNumber: validatedPrimaryLead?.idNumber,
         isSpouseBooking,
+        bookedByUsername: getCurrentUser()?.username,
       }),
     });
 

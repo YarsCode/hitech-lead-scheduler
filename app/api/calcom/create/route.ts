@@ -33,6 +33,7 @@ const createEventSchema = z.object({
   additionalCustomerCellNumber: z.string().nullish(),
   customerIdNumber: z.string().nullish(),
   isSpouseBooking: z.boolean().nullish(),
+  bookedByUsername: z.string().nullish(),
 }).refine(
   (data) => !data.isInPersonMeeting || (data.address && data.address.trim() !== ""),
   { message: "Address is required for in-person meetings", path: ["address"] }
@@ -187,6 +188,7 @@ export async function POST(request: NextRequest) {
       meetingAddress: isInPersonMeeting ? address : undefined,
       dailyLimits: Object.keys(dailyLimitsMap).length > 0 ? JSON.stringify(dailyLimitsMap) : undefined,
       surenseSubject,
+      bookedByUsername: body.bookedByUsername,
     };
     
     // Build URL params from non-empty metadata fields
