@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
       description,
       customName: title,
       schedulingType: "ROUND_ROBIN",
+      rescheduleWithSameRoundRobinHost: true,
       beforeEventBuffer: isSpouseBooking ? 0 : 30,
       afterEventBuffer: isSpouseBooking ? 0 : 30,
       hosts: hosts.map((h) => ({
