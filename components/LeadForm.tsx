@@ -394,6 +394,30 @@ export function LeadForm() {
 
         setSelectedAgent(matchedAgent);
 
+        // Delete all-day blocking event for this agent (Israel timezone)
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Jerusalem",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        });
+        const dateStr = formatter.format(now);
+        const startDate = `${dateStr}T00:00:00`;
+        const endDate = `${dateStr}T23:59:59`;
+        
+        await fetch("/api/delete-allday-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: matchedAgent.email,
+            startDate,
+            endDate,
+          }),
+        }).catch(() => {
+          // Continue even if delete fails (non-blocking)
+        });
+
         // Create event type with this specific agent (no buffers or limits for spouse booking)
         const hosts = [{ userId: matchedAgent.userId, weight: 100, email: matchedAgent.email }];
         const result = await createCalcomEventType(
