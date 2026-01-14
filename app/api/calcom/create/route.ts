@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       title,
       slug,
       description,
-      customName: title,
+      customName: `${customerFullName || "לקוח"}, פגישה עם {Organiser} בנושא ${interestName || "ביטוח"}`,
       schedulingType: "ROUND_ROBIN",
       rescheduleWithSameRoundRobinHost: true,
       beforeEventBuffer: isSpouseBooking ? 0 : 30,

@@ -7,17 +7,14 @@ const requestSchema = z.object({
   leadId: z.string().min(1),
 });
 
-// Shape of the Surense meeting object from n8n
-const surenseMeetingSchema = z.object({
+const n8nResponseSchema = z.object({
   email: z.string().email(),
-  startDate: z.string(),
-  endDate: z.string(),
 });
 
 export async function POST(request: NextRequest) {
   if (!N8N_WEBHOOK_URL) {
     return NextResponse.json(
-      { success: false, error: "Spouse meeting webhook not configured" },
+      { success: false, error: "Webhook not configured" },
       { status: 500 }
     );
   }
@@ -40,34 +37,25 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      console.error("n8n webhook error:", response.status);
-      return NextResponse.json({ success: true, meeting: null });
+      return NextResponse.json({ success: false, error: "Failed to fetch agent" });
     }
 
     const data = await response.json();
+    const item = Array.isArray(data) ? data[0] : data;
 
-    const meeting = Array.isArray(data) ? data[0] : data;
-    if (!meeting) {
-      return NextResponse.json({ success: true, meeting: null });
-    }
-
-    const meetingData = surenseMeetingSchema.safeParse(meeting);
-    if (!meetingData.success) {
-      return NextResponse.json({ success: true, meeting: null });
+    const result = n8nResponseSchema.safeParse(item);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: "No agent found for this lead" });
     }
 
     return NextResponse.json({
       success: true,
-      meeting: {
-        agentEmail: meetingData.data.email,
-        startDate: meetingData.data.startDate,
-        endDate: meetingData.data.endDate,
-      },
+      agentEmail: result.data.email,
     });
   } catch (error) {
-    console.error("Error fetching spouse meeting:", error);
+    console.error("Error fetching spouse agent:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch meeting data" },
+      { success: false, error: "Failed to fetch agent data" },
       { status: 500 }
     );
   }

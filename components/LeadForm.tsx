@@ -54,10 +54,9 @@ export function LeadForm() {
   // Agent availability error (for auto mode)
   const [agentAvailabilityError, setAgentAvailabilityError] = useState<string>("");
 
-  // Spouse meeting data (when main lead has an existing meeting)
+  // Spouse booking data (agent email for the primary lead)
   const [spouseMeetingData, setSpouseMeetingData] = useState<{
     agentEmail: string;
-    meetingDate: string; // YYYY-MM-DD for Cal.com
   } | null>(null);
 
   const {
@@ -207,7 +206,7 @@ export function LeadForm() {
       setValidatedPrimaryLead(data.primaryLead || null);
       setValidatedAdditionalLead(data.additionalLead || null);
 
-      // If spouse toggle is ON, fetch main lead's existing meeting
+      // If spouse toggle is ON, fetch the agent associated with the primary lead
       if (isCouplesMeeting && data.primaryLead?.id) {
         const spouseResponse = await fetch("/api/spouse-meeting", {
           method: "POST",
@@ -217,15 +216,15 @@ export function LeadForm() {
 
         const spouseData: SpouseMeetingResponse = await spouseResponse.json();
 
-        if (spouseData.success && spouseData.meeting) {
-          const meetingDate = spouseData.meeting.endDate.split("T")[0];
-          setSpouseMeetingData({
-            agentEmail: spouseData.meeting.agentEmail,
-            meetingDate,
-          });
+        if (spouseData.success && spouseData.agentEmail) {
+          setSpouseMeetingData({ agentEmail: spouseData.agentEmail });
           setIsValidatingLeads(false);
           return;
         }
+
+        // No agent found - show error and stay on Part 1
+        setLeadValidationError(spouseData.error || "לא נמצא סוכן משויך לליד הראשי");
+        return;
       }
 
       setCurrentPart(2);
@@ -387,9 +386,8 @@ export function LeadForm() {
         );
 
         if (!matchedAgent?.userId) {
-          // Agent not found or has no Cal.com userId - fall back to normal flow
+          showErrorModal("הסוכן המשויך לליד הראשי לא נמצא במערכת או שאין לו יומן פעיל.");
           setSpouseMeetingData(null);
-          setCurrentPart(2);
           setIsSubmitting(false);
           return;
         }
@@ -479,6 +477,8 @@ export function LeadForm() {
     setEventTypeId(null);
     setBookingLink("");
     setShowCalendar(false);
+    setSpouseMeetingData(null);
+    setSelectedAgent(null);
   };
 
   return (
@@ -548,7 +548,6 @@ export function LeadForm() {
                 email: validatedPrimaryLead?.email,
                 additionalEmail: validatedAdditionalLead?.email,
               }}
-              preselectedDate={spouseMeetingData?.meetingDate}
               onBookingSuccess={handleBookingSuccess}
               onBookingError={handleBookingError}
             />
