@@ -206,12 +206,12 @@ export function LeadForm() {
       setValidatedPrimaryLead(data.primaryLead || null);
       setValidatedAdditionalLead(data.additionalLead || null);
 
-      // If spouse toggle is ON, fetch the agent associated with the primary lead
-      if (isCouplesMeeting && data.primaryLead?.id) {
+      // If spouse toggle is ON, fetch the agent associated with the spouse lead
+      if (isCouplesMeeting && data.additionalLead?.id) {
         const spouseResponse = await fetch("/api/spouse-meeting", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ leadId: data.primaryLead.id }),
+          body: JSON.stringify({ leadId: data.additionalLead.id }),
         });
 
         const spouseData: SpouseMeetingResponse = await spouseResponse.json();
