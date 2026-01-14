@@ -394,8 +394,8 @@ export function LeadForm() {
 
         setSelectedAgent(matchedAgent);
 
-        // Create event type with this specific agent (no buffers for spouse booking)
-        const hosts = [{ userId: matchedAgent.userId, weight: 100, email: matchedAgent.email, dailyLimit: matchedAgent.dailyLimit }];
+        // Create event type with this specific agent (no buffers or limits for spouse booking)
+        const hosts = [{ userId: matchedAgent.userId, weight: 100, email: matchedAgent.email }];
         const result = await createCalcomEventType(
           {
             primaryLeadNumber,
