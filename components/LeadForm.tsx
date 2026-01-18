@@ -604,7 +604,7 @@ export function LeadForm() {
               {isCouplesMeeting && (
                 <TextInput
                   {...register("additionalLeadNumber")}
-                  label="מספר ליד בן/בת הזוג*"
+                  label="מספר ליד בן/בת הזוג שכבר תואם*"
                   error={errors.additionalLeadNumber?.message}
                   placeholder="הזן מספר ליד בן/בת הזוג"
                   className="animate-slide-down"
