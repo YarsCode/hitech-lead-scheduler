@@ -106,8 +106,8 @@ export async function POST(request: NextRequest) {
       customName: `${customerFullName || "לקוח"}, פגישה עם {Organiser} בנושא ${interestName || "ביטוח"}`,
       schedulingType: "ROUND_ROBIN",
       rescheduleWithSameRoundRobinHost: true,
-      beforeEventBuffer: isSpouseBooking ? 0 : 30,
-      afterEventBuffer: isSpouseBooking ? 0 : 30,
+      // beforeEventBuffer: isSpouseBooking ? 0 : 30,
+      // afterEventBuffer: isSpouseBooking ? 0 : 30,
       hosts: hosts.map((h) => ({
         userId: Number(h.userId),
         weight: h.weight,
