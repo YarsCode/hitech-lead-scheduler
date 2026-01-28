@@ -54,9 +54,10 @@ export function LeadForm() {
   // Agent availability error (for auto mode)
   const [agentAvailabilityError, setAgentAvailabilityError] = useState<string>("");
 
-  // Spouse booking data (agent email for the primary lead)
+  // Spouse booking data (agent email and eventTypeId for the primary lead)
   const [spouseMeetingData, setSpouseMeetingData] = useState<{
     agentEmail: string;
+    eventTypeId?: string;
   } | null>(null);
 
   const {
@@ -217,7 +218,7 @@ export function LeadForm() {
         const spouseData: SpouseMeetingResponse = await spouseResponse.json();
 
         if (spouseData.success && spouseData.agentEmail) {
-          setSpouseMeetingData({ agentEmail: spouseData.agentEmail });
+          setSpouseMeetingData({ agentEmail: spouseData.agentEmail, eventTypeId: spouseData.eventTypeId });
           setIsValidatingLeads(false);
           return;
         }
@@ -331,7 +332,7 @@ export function LeadForm() {
     }));
   };
 
-  const createCalcomEventType = async (data: LeadFormData, hosts: { userId: number; weight: number }[], isSpouseBooking = false) => {
+  const createCalcomEventType = async (data: LeadFormData, hosts: { userId: number; weight: number }[], isSpouseBooking = false, eventTypeId?: string) => {
     const response = await fetch("/api/calcom/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -357,6 +358,7 @@ export function LeadForm() {
         customerIdNumber: validatedPrimaryLead?.idNumber,
         isSpouseBooking,
         bookedByUsername: getCurrentUser()?.username,
+        eventTypeId,
       }),
     });
 
@@ -432,7 +434,8 @@ export function LeadForm() {
             agentId: matchedAgent.id,
           },
           hosts,
-          true // isSpouseBooking - no buffers
+          true, // isSpouseBooking - no buffers
+          spouseMeetingData.eventTypeId // first lead's eventTypeId to remove its buffer
         );
 
         setBookingLink(result.bookingLink);

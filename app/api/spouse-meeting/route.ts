@@ -9,6 +9,7 @@ const requestSchema = z.object({
 
 const n8nResponseSchema = z.object({
   email: z.string().email(),
+  eventTypeId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       agentEmail: result.data.email,
+      eventTypeId: result.data.eventTypeId,
     });
   } catch (error) {
     console.error("Error fetching spouse agent:", error);

@@ -86,5 +86,6 @@ export interface User {
 export interface SpouseMeetingResponse {
   success: boolean;
   agentEmail?: string;
+  eventTypeId?: string;
   error?: string;
 }

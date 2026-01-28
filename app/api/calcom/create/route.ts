@@ -34,6 +34,7 @@ const createEventSchema = z.object({
   customerIdNumber: z.string().nullish(),
   isSpouseBooking: z.boolean().nullish(),
   bookedByUsername: z.string().nullish(),
+  eventTypeId: z.string().nullish(), // ID of first lead's event type - used to remove buffer for spouse booking
 }).refine(
   (data) => !data.isInPersonMeeting || (data.address && data.address.trim() !== ""),
   { message: "Address is required for in-person meetings", path: ["address"] }
@@ -72,7 +73,29 @@ export async function POST(request: NextRequest) {
     }
 
     const body = parsed.data;
-    const { additionalLeadNumber, leadId, additionalLeadId, customerId, additionalCustomerId, customerFullName, customerEmail, additionalCustomerFullName, additionalCustomerEmail, agentName, agentPhone, interestName, hosts, isInPersonMeeting, address, customerCellNumber, customerIdNumber, isSpouseBooking } = body;
+    const { additionalLeadNumber, leadId, additionalLeadId, customerId, additionalCustomerId, customerFullName, customerEmail, additionalCustomerFullName, additionalCustomerEmail, agentName, agentPhone, interestName, hosts, isInPersonMeeting, address, customerCellNumber, customerIdNumber, isSpouseBooking, eventTypeId } = body;
+
+    // If spouse booking with eventTypeId, remove buffer from the first event type
+    if (isSpouseBooking && eventTypeId) {
+      const removeBufferResponse = await fetch(
+        `https://api.cal.com/v2/teams/${CALCOM_TEAM_ID}/event-types/${eventTypeId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Authorization": `Bearer ${CALCOM_API_KEY}`,
+            "Content-Type": "application/json",
+            "cal-api-version": "2024-06-14",
+          },
+          body: JSON.stringify({ beforeEventBuffer: 0 }),
+        }
+      );
+
+      if (!removeBufferResponse.ok) {
+        const errorData = await removeBufferResponse.text();
+        console.error("Failed to remove buffer from first event type:", errorData);
+        // Continue anyway - don't block spouse booking if buffer removal fails
+      }
+    }
 
     // Generate a unique slug (short and unique)
     const timestamp = Date.now().toString(36);
@@ -189,6 +212,7 @@ export async function POST(request: NextRequest) {
       dailyLimits: Object.keys(dailyLimitsMap).length > 0 ? JSON.stringify(dailyLimitsMap) : undefined,
       surenseSubject,
       bookedByUsername: body.bookedByUsername,
+      newEventTypeId: calcomData.data.id.toString(), // Pass to webhook so n8n can store in Surense for spouse bookings
     };
     
     // Build URL params from non-empty metadata fields
