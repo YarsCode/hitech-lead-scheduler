@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   title: "תיאום פגישות - הייטק סוכנות לביטוח",
   description: "מערכת תיאום פגישות עם סוכני ביטוח",
   robots: "noindex, nofollow",
+  icons: {
+    icon: "https://ht-ins.co.il/wp-content/themes/htins/sitefiles/htins-logo.png",
+  },
 };
 
 export default function RootLayout({
