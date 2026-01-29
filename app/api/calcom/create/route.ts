@@ -132,10 +132,12 @@ export async function POST(request: NextRequest) {
       isWeightsEnabled: true,
       beforeEventBuffer: isSpouseBooking ? 0 : 30,
       // afterEventBuffer: isSpouseBooking ? 0 : 30,
-      hosts: hosts.map((h) => ({
-        userId: Number(h.userId),
-        weight: h.weight,
-      })),
+      hosts: [...hosts]
+        .sort(() => Math.random() - 0.5)
+        .map((h) => ({
+          userId: Number(h.userId),
+          weight: h.weight,
+        })),
       ...(isInPersonMeeting && address && {
         locations: [{ type: "address", address, public: true }],
       }),
