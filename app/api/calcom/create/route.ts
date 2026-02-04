@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
             "Content-Type": "application/json",
             "cal-api-version": "2024-06-14",
           },
-          body: JSON.stringify({ beforeEventBuffer: 0 }),
+          body: JSON.stringify({ beforeEventBuffer: 0, afterEventBuffer: 0 }),
         }
       );
 
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       rescheduleWithSameRoundRobinHost: true,
       isWeightsEnabled: true,
       beforeEventBuffer: isSpouseBooking ? 0 : 30,
-      // afterEventBuffer: isSpouseBooking ? 0 : 30,
+      afterEventBuffer: isSpouseBooking ? 0 : 30,
       hosts: [...hosts]
         .sort(() => Math.random() - 0.5)
         .map((h) => ({

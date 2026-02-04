@@ -8,7 +8,7 @@ const CALCOM_API_KEY = process.env.CALCOM_API_KEY;
 const CALCOM_TEAM_ID = process.env.CALCOM_TEAM_ID;
 
 const FORBIDDEN_TRAFFIC_LIGHT_STATUS = "🔴";
-const EVEN_DISTRIBUTION_GAP_THRESHOLD = 3;
+const EVEN_DISTRIBUTION_GAP_THRESHOLD = 4;
 const MEMBERSHIPS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 let membershipsCache: { data: Map<string, number>; timestamp: number } | null = null;
@@ -92,10 +92,10 @@ async function getBookingCounts(): Promise<BookingCounts> {
   try {
     while (true) {
       const url = new URL("https://api.cal.com/v2/bookings");
-      url.searchParams.set("afterStart", afterStart);
-      url.searchParams.set("beforeEnd", beforeEnd);
+      url.searchParams.set("afterCreatedAt", afterStart);
+      url.searchParams.set("beforeCreatedAt", beforeEnd);
       url.searchParams.set("status", "upcoming,recurring,past");
-      url.searchParams.set("take", "100");
+      url.searchParams.set("take", "500");
       if (cursor) url.searchParams.set("cursor", cursor.toString());
 
       const response = await fetch(url.toString(), {
@@ -108,15 +108,15 @@ async function getBookingCounts(): Promise<BookingCounts> {
       const bookings = data.data?.bookings ?? [];
 
       bookings
-        .filter((b: { user?: { id?: number }; startTime?: string }) => b.user?.id && b.startTime)
-        .forEach((b: { user: { id: number }; startTime: string }) => {
-          const bookingDate = new Date(b.startTime);
-          const bookingYear = bookingDate.getFullYear();
-          const bookingMonth = bookingDate.getMonth();
+        .filter((b: { user?: { id?: number }; createdAt?: string }) => b.user?.id && b.createdAt)
+        .forEach((b: { user: { id: number }; createdAt: string }) => {
+          const createdDate = new Date(b.createdAt);
+          const createdYear = createdDate.getFullYear();
+          const createdMonth = createdDate.getMonth();
 
-          if (bookingYear === currentYear && bookingMonth === currentMonth) {
+          if (createdYear === currentYear && createdMonth === currentMonth) {
             bookingCounts.currentMonth[b.user.id] = (bookingCounts.currentMonth[b.user.id] || 0) + 1;
-          } else if (bookingYear === nextYear && bookingMonth === nextMonth) {
+          } else if (createdYear === nextYear && createdMonth === nextMonth) {
             bookingCounts.nextMonth[b.user.id] = (bookingCounts.nextMonth[b.user.id] || 0) + 1;
           }
         });
@@ -183,6 +183,7 @@ export async function GET(request: NextRequest) {
       getCalcomTeamMembers(),
       isManualMode ? Promise.resolve({ currentMonth: {}, nextMonth: {} }) : getBookingCounts(),
     ]);
+    console.log("Booking counts:", JSON.stringify({ currentMonth: Object.fromEntries(Object.entries(bookingCounts.currentMonth).map(([id, c]) => [[...calcomEmailToUserId].find(([, v]) => v === +id)?.[0] || id, c])), nextMonth: Object.fromEntries(Object.entries(bookingCounts.nextMonth).map(([id, c]) => [[...calcomEmailToUserId].find(([, v]) => v === +id)?.[0] || id, c])) }, null, 2));
 
     if (!airtableResponse.ok) {
       throw new Error(`Airtable API error: ${airtableResponse.status}`);
