@@ -8,7 +8,7 @@ const CALCOM_API_KEY = process.env.CALCOM_API_KEY;
 const CALCOM_TEAM_ID = process.env.CALCOM_TEAM_ID;
 
 const FORBIDDEN_TRAFFIC_LIGHT_STATUS = "🔴";
-const EVEN_DISTRIBUTION_GAP_THRESHOLD = 5;
+const EVEN_DISTRIBUTION_GAP_THRESHOLD = 6;
 const MEMBERSHIPS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 let membershipsCache: { data: Map<string, number>; timestamp: number } | null = null;
