@@ -505,7 +505,6 @@ export function LeadForm() {
     setBookingLink("");
     setShowCalendar(false);
     setSpouseMeetingData(null);
-    setSelectedAgent(null);
   };
 
   return (
