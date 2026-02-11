@@ -10,8 +10,10 @@ const CALCOM_TEAM_ID = process.env.CALCOM_TEAM_ID;
 const FORBIDDEN_TRAFFIC_LIGHT_STATUS = "🔴";
 const EVEN_DISTRIBUTION_GAP_THRESHOLD = 6;
 const MEMBERSHIPS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const BOOKINGS_CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
 let membershipsCache: { data: Map<string, number>; timestamp: number } | null = null;
+let bookingsCache: { data: BookingCounts; timestamp: number } | null = null;
 
 interface AirtableAgentRecord {
   id: string;
@@ -76,6 +78,10 @@ async function getBookingCounts(): Promise<BookingCounts> {
   const empty: BookingCounts = { currentMonth: {}, nextMonth: {} };
   if (!CALCOM_API_KEY) return empty;
 
+  if (bookingsCache && Date.now() - bookingsCache.timestamp < BOOKINGS_CACHE_TTL_MS) {
+    return bookingsCache.data;
+  }
+
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
@@ -126,7 +132,10 @@ async function getBookingCounts(): Promise<BookingCounts> {
     }
   } catch {
     console.error("Error fetching bookings from Cal.com");
+    if (bookingsCache) return bookingsCache.data;
   }
+
+  bookingsCache = { data: bookingCounts, timestamp: Date.now() };
   return bookingCounts;
 }
 

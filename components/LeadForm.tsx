@@ -38,6 +38,7 @@ export function LeadForm() {
   const [bookingLink, setBookingLink] = useState<string>("");
   const [eventTypeId, setEventTypeId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [bookingComplete, setBookingComplete] = useState(false);
   const [errorModal, setErrorModal] = useState<{
     open: boolean;
@@ -376,6 +377,8 @@ export function LeadForm() {
     if (!spouseMeetingData) return;
 
     const handleSpouseBooking = async () => {
+      if (isSubmittingRef.current) return;
+      isSubmittingRef.current = true;
       setIsSubmitting(true);
       try {
         // Fetch all agents (bypass filters for spouse booking - ignore traffic light & limits)
@@ -446,6 +449,7 @@ export function LeadForm() {
         showErrorModal("אירעה שגיאה בטעינת היומן. אנא נסה שוב.");
         setSpouseMeetingData(null);
       } finally {
+        isSubmittingRef.current = false;
         setIsSubmitting(false);
       }
     };
@@ -455,6 +459,8 @@ export function LeadForm() {
   }, [spouseMeetingData]);
 
   const onSubmit = async (data: LeadFormData) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setAgentAvailabilityError("");
     
@@ -474,6 +480,7 @@ export function LeadForm() {
       console.error("Error creating event type:", error);
       showErrorModal("אירעה שגיאה. אנא נסה שוב.");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
