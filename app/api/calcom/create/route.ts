@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
       isWeightsEnabled: true,
       beforeEventBuffer: isSpouseBooking ? 0 : 30,
       afterEventBuffer: isSpouseBooking ? 0 : 30,
+      minimumBookingNotice: 240, // 4 hours, in minutes
       hosts: [...hosts]
         .sort(() => Math.random() - 0.5)
         .map((h) => ({
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
       bookingWindow: {
         type: "calendarDays",
         value: 21,
-      }
+      },
     };
 
     // Create event type via Cal.com API v2
