@@ -10,10 +10,8 @@ const CALCOM_TEAM_ID = process.env.CALCOM_TEAM_ID;
 const FORBIDDEN_TRAFFIC_LIGHT_STATUS = "🔴";
 const EVEN_DISTRIBUTION_GAP_THRESHOLD = 10;
 const MEMBERSHIPS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const BOOKINGS_CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
 let membershipsCache: { data: Map<string, number>; timestamp: number } | null = null;
-let bookingsCache: { data: BookingCounts; timestamp: number } | null = null;
 
 interface AirtableAgentRecord {
   id: string;
@@ -31,11 +29,6 @@ interface AirtableAgentRecord {
     "משקל"?: number;
     [key: string]: string | number | boolean | undefined;
   };
-}
-
-interface BookingCounts {
-  currentMonth: Record<number, number>;
-  nextMonth: Record<number, number>;
 }
 
 interface CalcomTeamMember {
@@ -74,75 +67,14 @@ async function getCalcomTeamMembers(): Promise<Map<string, number>> {
   return emailToUserId;
 }
 
-async function getBookingCounts(): Promise<BookingCounts> {
-  const empty: BookingCounts = { currentMonth: {}, nextMonth: {} };
-  if (!CALCOM_API_KEY) return empty;
-
-  if (bookingsCache && Date.now() - bookingsCache.timestamp < BOOKINGS_CACHE_TTL_MS) {
-    return bookingsCache.data;
-  }
-
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  const nextMonthDate = new Date(currentYear, currentMonth + 1, 1);
-  const nextYear = nextMonthDate.getFullYear();
-  const nextMonth = nextMonthDate.getMonth();
-
-  const afterStart = new Date(Date.UTC(currentYear, currentMonth, 1)).toISOString().replace(".000Z", "Z");
-  const beforeEnd = new Date(Date.UTC(nextYear, nextMonth + 1, 0, 23, 59, 59)).toISOString().replace(".000Z", "Z");
-
-  const bookingCounts: BookingCounts = { currentMonth: {}, nextMonth: {} };
-  let cursor: number | undefined;
-
-  try {
-    while (true) {
-      const url = new URL("https://api.cal.com/v2/bookings");
-      url.searchParams.set("afterCreatedAt", afterStart);
-      url.searchParams.set("beforeCreatedAt", beforeEnd);
-      url.searchParams.set("status", "upcoming,recurring,past");
-      url.searchParams.set("take", "500");
-      if (cursor) url.searchParams.set("cursor", cursor.toString());
-
-      const response = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${CALCOM_API_KEY}`, "Content-Type": "application/json", "cal-api-version": "2024-06-14" },
-        cache: "no-store",
-      });
-      if (!response.ok) return empty;
-
-      const data = await response.json();
-      const bookings = data.data?.bookings ?? [];
-
-      bookings
-        .filter((b: { user?: { id?: number }; createdAt?: string }) => b.user?.id && b.createdAt)
-        .forEach((b: { user: { id: number }; createdAt: string }) => {
-          const createdDate = new Date(b.createdAt);
-          const createdYear = createdDate.getFullYear();
-          const createdMonth = createdDate.getMonth();
-
-          if (createdYear === currentYear && createdMonth === currentMonth) {
-            bookingCounts.currentMonth[b.user.id] = (bookingCounts.currentMonth[b.user.id] || 0) + 1;
-          } else if (createdYear === nextYear && createdMonth === nextMonth) {
-            bookingCounts.nextMonth[b.user.id] = (bookingCounts.nextMonth[b.user.id] || 0) + 1;
-          }
-        });
-
-      cursor = data.data?.nextCursor;
-      if (!cursor) break;
-    }
-  } catch {
-    console.error("Error fetching bookings from Cal.com");
-    if (bookingsCache) return bookingsCache.data;
-  }
-
-  bookingsCache = { data: bookingCounts, timestamp: Date.now() };
-  return bookingCounts;
+function getMonthlyBookingCount(record: AirtableAgentRecord): number {
+  return (record.fields["כמות פגישות שנקבעו החודש"] as number) ?? 0;
 }
 
-function isAtMonthlyLimit(record: AirtableAgentRecord, userId: number, bookingCounts: BookingCounts): boolean {
+function isAtMonthlyLimit(record: AirtableAgentRecord): boolean {
   const limit = record.fields["מכסה חודשית"];
   if (limit == null) return false;
-  return (bookingCounts.currentMonth[userId] || 0) >= limit && (bookingCounts.nextMonth[userId] || 0) >= limit;
+  return getMonthlyBookingCount(record) >= limit;
 }
 
 function mapRecordToAgent(record: AirtableAgentRecord, userId: number): Agent {
@@ -158,17 +90,11 @@ function mapRecordToAgent(record: AirtableAgentRecord, userId: number): Agent {
   };
 }
 
-function getEffectiveCount(agent: Agent, bookingCounts: BookingCounts): number {
-  if (!agent.userId) return 0;
-  const currCount = bookingCounts.currentMonth[agent.userId] || 0;
-  const nextCount = bookingCounts.nextMonth[agent.userId] || 0;
-  return currCount >= (agent.monthlyLimit ?? Infinity) ? nextCount : currCount;
-}
-
-function applyEvenDistribution(agents: Agent[], bookingCounts: BookingCounts): Agent[] {
+function applyEvenDistribution(agents: Agent[], recordsByUserId: Map<number, AirtableAgentRecord>): Agent[] {
   if (agents.length <= 1) return agents;
-  const minCount = Math.min(...agents.map((a) => getEffectiveCount(a, bookingCounts)));
-  return agents.filter((a) => getEffectiveCount(a, bookingCounts) <= minCount + EVEN_DISTRIBUTION_GAP_THRESHOLD);
+  const getCount = (a: Agent) => a.userId ? getMonthlyBookingCount(recordsByUserId.get(a.userId)!) : 0;
+  const minCount = Math.min(...agents.map(getCount));
+  return agents.filter((a) => getCount(a) <= minCount + EVEN_DISTRIBUTION_GAP_THRESHOLD);
 }
 
 export async function GET(request: NextRequest) {
@@ -184,16 +110,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [airtableResponse, calcomEmailToUserId, bookingCounts] = await Promise.all([
+    const [airtableResponse, calcomEmailToUserId] = await Promise.all([
       fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AGENTS_TABLE_ID}`, {
         headers: { Authorization: `Bearer ${AIRTABLE_API_TOKEN}` },
         cache: "no-store",
       }),
       getCalcomTeamMembers(),
-      isManualMode ? Promise.resolve({ currentMonth: {}, nextMonth: {} }) : getBookingCounts(),
     ]);
-    console.log("Booking counts:", JSON.stringify({ currentMonth: Object.fromEntries(Object.entries(bookingCounts.currentMonth).map(([id, c]) => [[...calcomEmailToUserId].find(([, v]) => v === +id)?.[0] || id, c])), nextMonth: Object.fromEntries(Object.entries(bookingCounts.nextMonth).map(([id, c]) => [[...calcomEmailToUserId].find(([, v]) => v === +id)?.[0] || id, c])) }, null, 2));
-
     if (!airtableResponse.ok) {
       throw new Error(`Airtable API error: ${airtableResponse.status}`);
     }
@@ -215,8 +138,8 @@ export async function GET(request: NextRequest) {
 
     let selectedRecords = matchedRecords;
     if (!isManualMode && !bypassFilters) {
-      const primaryPool = matchedRecords.filter(({ record, userId }) => !isAtMonthlyLimit(record, userId, bookingCounts));
-      const fallbackPool = matchedRecords.filter(({ record, userId }) => isAtMonthlyLimit(record, userId, bookingCounts));
+      const primaryPool = matchedRecords.filter(({ record }) => !isAtMonthlyLimit(record));
+      const fallbackPool = matchedRecords.filter(({ record }) => isAtMonthlyLimit(record));
       selectedRecords = primaryPool.length > 0 ? primaryPool : fallbackPool;
     }
 
@@ -225,7 +148,8 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
     if (!isManualMode && evenDistribution && agents.length > 1) {
-      agents = applyEvenDistribution(agents, bookingCounts);
+      const recordsByUserId = new Map(matchedRecords.map(({ record, userId }) => [userId, record]));
+      agents = applyEvenDistribution(agents, recordsByUserId);
     }
 
     return NextResponse.json({ agents } as AgentsResponse);
