@@ -143,16 +143,14 @@ export async function GET(request: NextRequest) {
       selectedRecords = primaryPool.length > 0 ? primaryPool : fallbackPool;
     }
 
-    // let agents = selectedRecords
-    const agents = selectedRecords
+    let agents = selectedRecords
       .map(({ record, userId }) => mapRecordToAgent(record, userId))
       .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
-    // TEMPORARILY DISABLED: even distribution filtering
-    // if (!isManualMode && evenDistribution && agents.length > 1) {
-    //   const recordsByUserId = new Map(matchedRecords.map(({ record, userId }) => [userId, record]));
-    //   agents = applyEvenDistribution(agents, recordsByUserId);
-    // }
+    if (!isManualMode && evenDistribution && agents.length > 1) {
+      const recordsByUserId = new Map(matchedRecords.map(({ record, userId }) => [userId, record]));
+      agents = applyEvenDistribution(agents, recordsByUserId);
+    }
 
     return NextResponse.json({ agents } as AgentsResponse);
   } catch (error) {
