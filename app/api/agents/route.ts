@@ -87,6 +87,7 @@ function mapRecordToAgent(record: AirtableAgentRecord, userId: number): Agent {
     monthlyLimit: record.fields["מכסה חודשית"],
     weight: record.fields["משקל"],
     phone: record.fields["סלולרי"],
+    monthlyBookingCount: getMonthlyBookingCount(record),
   };
 }
 

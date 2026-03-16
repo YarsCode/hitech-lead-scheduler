@@ -300,12 +300,12 @@ export function LeadForm() {
   };
 
   // Fetch hosts based on agent selection mode
-  const fetchHosts = async (data: LeadFormData): Promise<{ userId: number; weight: number; email?: string; dailyLimit?: number }[]> => {
+  const fetchHosts = async (data: LeadFormData): Promise<{ userId: number; weight: number; email?: string; dailyLimit?: number; monthlyBookingCount?: number }[]> => {
     // Manual mode - use selected agent
     if (data.agentId) {
       const agent = agentsWithUserId.find((a) => a.id === data.agentId);
       return agent?.userId 
-        ? [{ userId: agent.userId, weight: agent.weight ?? 100, email: agent.email, dailyLimit: agent.dailyLimit }] 
+        ? [{ userId: agent.userId, weight: agent.weight ?? 100, email: agent.email, dailyLimit: agent.dailyLimit, monthlyBookingCount: agent.monthlyBookingCount }] 
         : [];
     }
     
@@ -330,6 +330,7 @@ export function LeadForm() {
       weight: a.weight ?? 100, 
       email: a.email,
       dailyLimit: a.dailyLimit,
+      monthlyBookingCount: a.monthlyBookingCount,
     }));
   };
 

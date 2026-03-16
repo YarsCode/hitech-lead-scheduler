@@ -10,6 +10,7 @@ const hostSchema = z.object({
   weight: z.number(),
   dailyLimit: z.number().nullish(),
   email: z.string().nullish(),
+  monthlyBookingCount: z.number().nullish(),
 });
 
 const createEventSchema = z.object({
@@ -134,7 +135,10 @@ export async function POST(request: NextRequest) {
       afterEventBuffer: isSpouseBooking ? 0 : 30,
       minimumBookingNotice: 240,
       hosts: [...hosts]
-        .sort(() => Math.random() - 0.5)
+        .sort((a, b) => {
+          const diff = (a.monthlyBookingCount ?? 0) - (b.monthlyBookingCount ?? 0);
+          return diff !== 0 ? diff : Math.random() - 0.5;
+        })
         .map((h) => ({
           userId: Number(h.userId),
           weight: h.weight,

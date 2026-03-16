@@ -7,6 +7,7 @@ export interface Agent {
   monthlyLimit?: number;
   weight?: number;
   phone?: string;
+  monthlyBookingCount?: number;
 }
 
 export interface AgentsResponse {
@@ -36,7 +37,7 @@ export interface CreateEventTypeRequest {
   agentName?: string;
   agentPhone?: string;
   interestName?: string;
-  hosts: { userId: number; weight: number; dailyLimit?: number; email?: string }[];
+  hosts: { userId: number; weight: number; dailyLimit?: number; email?: string; monthlyBookingCount?: number }[];
   isInPersonMeeting?: boolean;
   address?: string;
 }
