@@ -131,8 +131,8 @@ export async function POST(request: NextRequest) {
       schedulingType: "ROUND_ROBIN",
       rescheduleWithSameRoundRobinHost: true,
       isWeightsEnabled: true,
-      beforeEventBuffer: isSpouseBooking ? 0 : 30,
-      afterEventBuffer: isSpouseBooking ? 0 : 30,
+      beforeEventBuffer: isSpouseBooking ? 0 : 15,
+      afterEventBuffer: isSpouseBooking ? 0 : 15,
       minimumBookingNotice: 240,
       hosts: [...hosts]
         .sort((a, b) => {
