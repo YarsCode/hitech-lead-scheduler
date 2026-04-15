@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ValidateLeadsResponse, ValidatedLead } from "@/lib/types";
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
-const N8N_WEBHOOK_AUTH = process.env.N8N_WEBHOOK_AUTH;
+const N8N_WEBHOOK_SECRET = process.env.N8N_VALIDATE_LEADS_WEBHOOK_SECRET;
 
 const LEADS_NOT_FOUND_ERROR = "מספר/י הליד/ים לא נמצאו, או שיש תקלה זמנית במערכת";
 
@@ -45,7 +45,7 @@ function buildValidatedLead(lead: WebhookLeadResult): ValidatedLead {
 }
 
 export async function POST(request: NextRequest) {
-  if (!N8N_WEBHOOK_URL || !N8N_WEBHOOK_AUTH) {
+  if (!N8N_WEBHOOK_URL || !N8N_WEBHOOK_SECRET) {
     console.error("Missing N8N webhook configuration");
     return NextResponse.json<ValidateLeadsResponse>(
       { success: false, error: "שגיאה בהגדרות המערכת" },
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Webhook-Secret": N8N_WEBHOOK_AUTH,
+        "X-Webhook-Secret": N8N_WEBHOOK_SECRET,
       },
       body: JSON.stringify(webhookBody),
     });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 const N8N_WEBHOOK_URL = process.env.N8N_DELETE_ALLDAY_EVENT_WEBHOOK_URL;
+const N8N_WEBHOOK_SECRET = process.env.N8N_DELETE_ALLDAY_EVENT_WEBHOOK_SECRET;
 
 const requestSchema = z.object({
   email: z.string().email(),
@@ -10,7 +11,7 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  if (!N8N_WEBHOOK_URL) {
+  if (!N8N_WEBHOOK_URL || !N8N_WEBHOOK_SECRET) {
     return NextResponse.json({ success: false, error: "Webhook not configured" }, { status: 500 });
   }
 
@@ -24,7 +25,10 @@ export async function POST(request: NextRequest) {
 
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Webhook-Secret": N8N_WEBHOOK_SECRET,
+      },
       body: JSON.stringify(parsed.data),
     });
 
