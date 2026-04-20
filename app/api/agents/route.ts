@@ -8,7 +8,8 @@ const CALCOM_API_KEY = process.env.CALCOM_API_KEY;
 const CALCOM_TEAM_ID = process.env.CALCOM_TEAM_ID;
 
 const FORBIDDEN_TRAFFIC_LIGHT_STATUS = "🔴";
-const EVEN_DISTRIBUTION_GAP_THRESHOLD = 6;
+const EVEN_DISTRIBUTION_GAP_THRESHOLD = Number(process.env.EVEN_DISTRIBUTION_GAP_THRESHOLD) || 6;
+const MIN_AVAILABLE_HOSTS = 15;
 const MEMBERSHIPS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 let membershipsCache: { data: Map<string, number>; timestamp: number } | null = null;
@@ -95,7 +96,22 @@ function applyEvenDistribution(agents: Agent[], recordsByUserId: Map<number, Air
   if (agents.length <= 1) return agents;
   const getCount = (a: Agent) => a.userId ? getMonthlyBookingCount(recordsByUserId.get(a.userId)!) : 0;
   const minCount = Math.min(...agents.map(getCount));
-  return agents.filter((a) => getCount(a) <= minCount + EVEN_DISTRIBUTION_GAP_THRESHOLD);
+
+  const kept: Agent[] = [];
+  const excluded: Agent[] = [];
+  for (const a of agents) {
+    if (getCount(a) <= minCount + EVEN_DISTRIBUTION_GAP_THRESHOLD) kept.push(a);
+    else excluded.push(a);
+  }
+
+  if (kept.length >= MIN_AVAILABLE_HOSTS || excluded.length === 0) return kept;
+
+  const sortedExcluded = [...excluded].sort((a, b) => {
+    const diff = getCount(a) - getCount(b);
+    return diff !== 0 ? diff : Math.random() - 0.5;
+  });
+  const needed = MIN_AVAILABLE_HOSTS - kept.length;
+  return [...kept, ...sortedExcluded.slice(0, needed)];
 }
 
 export async function GET(request: NextRequest) {

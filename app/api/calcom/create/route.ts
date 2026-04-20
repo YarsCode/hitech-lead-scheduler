@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { excludeOutlierHostsByMonthlyBookings } from "@/lib/excludeOutlierHosts";
 
 const CALCOM_API_KEY = process.env.CALCOM_API_KEY;
 const CALCOM_TEAM_ID = process.env.CALCOM_TEAM_ID;
@@ -75,18 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = parsed.data;
-    const { additionalLeadNumber, leadId, additionalLeadId, customerId, additionalCustomerId, customerFullName, customerEmail, additionalCustomerFullName, additionalCustomerEmail, agentName, agentPhone, interestName, hosts, isInPersonMeeting, address, customerCellNumber, customerIdNumber, isSpouseBooking, eventTypeId } = body;
-
-    let hostsForCal = [...hosts];
-    if (!isSpouseBooking && hostsForCal.length >= 2) {
-      hostsForCal = excludeOutlierHostsByMonthlyBookings(hostsForCal);
-    }
-    if (hostsForCal.length === 0) {
-      console.warn(
-        "excludeOutlierHostsByMonthlyBookings produced empty hosts; falling back to original hosts"
-      );
-      hostsForCal = [...hosts];
-    }
+    const { additionalLeadNumber, leadId, additionalLeadId, customerId, additionalCustomerId, customerFullName, customerEmail, additionalCustomerFullName, additionalCustomerEmail, agentName, interestName, hosts, isInPersonMeeting, address, customerCellNumber, customerIdNumber, isSpouseBooking, eventTypeId } = body;
 
     // If spouse booking with eventTypeId, remove buffer from the first event type
     if (isSpouseBooking && eventTypeId) {
@@ -146,7 +134,7 @@ export async function POST(request: NextRequest) {
       beforeEventBuffer: isSpouseBooking ? 0 : 15,
       afterEventBuffer: isSpouseBooking ? 0 : 15,
       minimumBookingNotice: 240,
-      hosts: [...hostsForCal]
+      hosts: [...hosts]
         .sort((a, b) => {
           const diff = (a.monthlyBookingCount ?? 0) - (b.monthlyBookingCount ?? 0);
           return diff !== 0 ? diff : Math.random() - 0.5;
@@ -204,7 +192,7 @@ export async function POST(request: NextRequest) {
     
     // Build dailyLimits mapping from hosts (email -> dailyLimit)
     const dailyLimitsMap = Object.fromEntries(
-      hostsForCal.filter((h) => h.email && h.dailyLimit !== undefined).map((h) => [h.email, h.dailyLimit])
+      hosts.filter((h) => h.email && h.dailyLimit !== undefined).map((h) => [h.email, h.dailyLimit])
     );
 
     // Build surense subject for webhook
