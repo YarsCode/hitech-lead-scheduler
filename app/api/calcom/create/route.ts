@@ -5,12 +5,15 @@ const CALCOM_API_KEY = process.env.CALCOM_API_KEY;
 const CALCOM_TEAM_ID = process.env.CALCOM_TEAM_ID;
 const CALCOM_TEAM_SLUG = process.env.CALCOM_TEAM_SLUG
 
+const PACE_RATIO_EPSILON = 0.01; // guards divide-by-zero on day 1 with low monthly limits
+
 const hostSchema = z.object({
   userId: z.number().positive(),
   weight: z.number(),
   dailyLimit: z.number().nullish(),
   email: z.string().nullish(),
   monthlyBookingCount: z.number().nullish(),
+  expectedMonthlyCount: z.number().nullish(),
 });
 
 const createEventSchema = z.object({
@@ -134,9 +137,15 @@ export async function POST(request: NextRequest) {
       beforeEventBuffer: isSpouseBooking ? 0 : 15,
       afterEventBuffer: isSpouseBooking ? 0 : 15,
       minimumBookingNotice: 240,
+      // Pace-ratio sort: each host ranked by actual/expected bookings ratio.
+      // Lower ratio = further behind own monthly pace = earlier in list (Cal.com round-robin
+      // favors top of list). Replaces the older raw-count sort which caused promotion-flood:
+      // a freshly-promoted agent (low count, but high new expected) used to land at top.
       hosts: [...hosts]
         .sort((a, b) => {
-          const diff = (a.monthlyBookingCount ?? 0) - (b.monthlyBookingCount ?? 0);
+          const ratioA = (a.monthlyBookingCount ?? 0) / Math.max(a.expectedMonthlyCount ?? PACE_RATIO_EPSILON, PACE_RATIO_EPSILON);
+          const ratioB = (b.monthlyBookingCount ?? 0) / Math.max(b.expectedMonthlyCount ?? PACE_RATIO_EPSILON, PACE_RATIO_EPSILON);
+          const diff = ratioA - ratioB;
           return diff !== 0 ? diff : Math.random() - 0.5;
         })
         .map((h) => ({
@@ -162,6 +171,21 @@ export async function POST(request: NextRequest) {
         value: 21,
       }
     };
+
+    // Concise outgoing-host summary (counts & ranges only — no userIds or PII)
+    if (hosts.length > 0) {
+      const ratios = hosts.map((h) =>
+        (h.monthlyBookingCount ?? 0) / Math.max(h.expectedMonthlyCount ?? PACE_RATIO_EPSILON, PACE_RATIO_EPSILON)
+      );
+      const weights = hosts.map((h) => h.weight);
+      const minRatio = Math.min(...ratios).toFixed(2);
+      const maxRatio = Math.max(...ratios).toFixed(2);
+      const minWeight = Math.min(...weights);
+      const maxWeight = Math.max(...weights);
+      console.log(
+        `[calcom-create] hosts=${hosts.length} minRatio=${minRatio} maxRatio=${maxRatio} weightsRange=${minWeight}-${maxWeight}`
+      );
+    }
 
     // Create event type via Cal.com API v2
     const calcomResponse = await fetch(

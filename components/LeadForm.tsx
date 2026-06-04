@@ -300,37 +300,43 @@ export function LeadForm() {
   };
 
   // Fetch hosts based on agent selection mode
-  const fetchHosts = async (data: LeadFormData): Promise<{ userId: number; weight: number; email?: string; dailyLimit?: number; monthlyBookingCount?: number }[]> => {
-    // Manual mode - use selected agent
+  const fetchHosts = async (data: LeadFormData): Promise<{ userId: number; weight: number; email?: string; dailyLimit?: number; monthlyBookingCount?: number; expectedMonthlyCount?: number }[]> => {
+    // Manual mode - use selected agent (pacing/sort doesn't apply; no expectedMonthlyCount needed)
     if (data.agentId) {
       const agent = agentsWithUserId.find((a) => a.id === data.agentId);
-      return agent?.userId 
-        ? [{ userId: agent.userId, weight: agent.weight ?? 100, email: agent.email, dailyLimit: agent.dailyLimit, monthlyBookingCount: agent.monthlyBookingCount }] 
+      return agent?.userId
+        ? [{ userId: agent.userId, weight: agent.weight ?? 100, email: agent.email, dailyLimit: agent.dailyLimit, monthlyBookingCount: agent.monthlyBookingCount }]
         : [];
     }
-    
-    // Auto mode - fetch with even distribution filter and interest-based filtering
+
+    // Auto mode - fetch paced agents with interest-based filtering
     const params = new URLSearchParams();
     // Pass lead's interest to filter agents by their specialization exclusions
     if (validatedPrimaryLead?.interestName) {
       params.set("interest", validatedPrimaryLead.interestName);
     }
     params.set("evenDistribution", "true");
-    
+
     const res = await fetch(`/api/agents?${params}`);
-    if (!res.ok) throw new Error("Failed to fetch agents");
-    
+    if (!res.ok) {
+      console.warn(`[LeadForm] /api/agents failed status=${res.status}`);
+      throw new Error("Failed to fetch agents");
+    }
+
     const agentsData = await res.json();
     const schedulableAgents = (agentsData.agents || []).filter(
       (a: Agent) => a.userId != null
     );
-        
-    return schedulableAgents.map((a: Agent) => ({ 
-      userId: a.userId!, 
-      weight: a.weight ?? 100, 
+
+    console.log(`[LeadForm] auto-hosts received: ${schedulableAgents.length}`);
+
+    return schedulableAgents.map((a: Agent) => ({
+      userId: a.userId!,
+      weight: a.weight ?? 100,
       email: a.email,
       dailyLimit: a.dailyLimit,
       monthlyBookingCount: a.monthlyBookingCount,
+      expectedMonthlyCount: a.expectedMonthlyCount,
     }));
   };
 
