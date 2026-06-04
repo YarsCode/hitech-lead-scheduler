@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
       customName: `${customerFullName || "לקוח"}, פגישה עם {Organiser} בנושא ${interestName || "ביטוח"}`,
       schedulingType: "ROUND_ROBIN",
       rescheduleWithSameRoundRobinHost: true,
-      isWeightsEnabled: true,
+      weightEnabled: true,
       beforeEventBuffer: isSpouseBooking ? 0 : 15,
       afterEventBuffer: isSpouseBooking ? 0 : 15,
       minimumBookingNotice: 240,
