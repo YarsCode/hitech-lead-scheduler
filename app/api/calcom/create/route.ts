@@ -188,6 +188,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Create event type via Cal.com API v2
+    // Redacted log: omit PII fields — title/customName/description carry the customer
+    // name; metadata carries phone/address/lead+customer IDs. Log payload shape with
+    // those fields redacted to field names/keys only.
+    console.log(
+      `[calcom-create] request body (redacted): ${JSON.stringify({
+        ...eventTypePayload,
+        title: "[redacted]",
+        customName: "[redacted]",
+        description: "[redacted]",
+        metadata: Object.keys(metadata),
+      })}`
+    );
     const calcomResponse = await fetch(
       `https://api.cal.com/v2/teams/${CALCOM_TEAM_ID}/event-types`,
       {
